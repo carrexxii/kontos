@@ -1,27 +1,47 @@
 %{
-let getOp op =
-    match op with
-    | "+" -> ( + )
-    | "-" -> ( - )
-    | "/" -> ( / )
-    | "*" -> ( * )
-    | _ -> failwith "unknown operator"
+    open Ast
 %}
 
 %token <int64>  INT
 %token <float>  FLT
 %token <string> STR
-%token <string> OP
+
 %token <string> IDENT
 %token FUN VAL VAR
 %token PREFIX INFIX POSTFIX
-%token LPAREN RPAREN COMMA
+%token EQUALS SEMI LPAREN RPAREN COMMA
 %token EOL EOF
-%start parse
-%type <int64> parse
+
+%start start
+%type <Ast.Program> start
 %%
 
-parse: expr EOF        	 { $1 }
-expr: INT                { $1 }
-    | expr OP expr       { $1 |> (getOp $2) <| $3 }
-    | LPAREN expr RPAREN { $2 }
+start: stmtList EOF { $1 }
+
+stmt:
+    // | VAL IDENT EQUALS expr { $2 }
+    | function              { FunStmt $1 }
+
+stmtList:
+    |               { [] }
+    | stmt          { [$1] }
+    | stmtList stmt { $2 :: $1 }
+
+function:
+    FUN IDENT identList EQUALS expr { Ast.Function ($2, $5) }
+
+identList:
+    |                 { [] }
+    | IDENT           { [$1] }
+    | identList IDENT { $2 :: $1 }
+
+expr:
+    | INT            { IntLit $1 }
+    | FLT            { FltLit $1 }
+    | STR            { StrLit $1 }
+    | IDENT exprList { FunCall ($1, $2) }
+
+exprList:
+    |                    { [] }
+    | expr               { [$1] }
+    | exprList SEMI expr { $3 :: $1 }

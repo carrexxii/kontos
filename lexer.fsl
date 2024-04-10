@@ -16,7 +16,7 @@ let digit = ['0'-'9']
 let char  = ['a'-'z' 'A'-'Z']
 let prefixSymbols  = ['$' '~']
 let postfixSymbols = ['!' '?']
-let infixSymbols   = ['*' '+' '-' '/' '=' '>' '<' '\\' '@' '%' '^' '&' '|' ':']
+let infixSymbols   = ['*' '+' '-' '/' '>' '<' '\\' '@' '%' '^' '&' '|' ':']
 // let delimitSymbols = [ '(', ')' '`', '`' '[', ']' '{', '}' '"', '"' ''', ''' ]
 
 let integer     = '-'? digit+
@@ -32,16 +32,19 @@ let newline     = ['\n']
 let compiler    = '#' char(char | '_')+
 
 rule tokenize = parse
-| whitespace      { tokenize lexbuf }
+| whitespace|newline     { tokenize lexbuf }
 | integer         { INT (System.Int64.Parse  (lexeme lexbuf)) }
 | float           { FLT (System.Double.Parse (lexeme lexbuf)) }
-| string          { STR (lexeme lexbuf) }
+| string          { let str = lexeme lexbuf
+                    STR str[1..str.Length - 2] }
 | identifier      { match keywords.TryFind (lexeme lexbuf) with
                    | Some token -> token
                    | None       -> IDENT (lexeme lexbuf) }
 | prefixSymbols   { PREFIX }
 | infixSymbols    { INFIX }
 | postfixSymbols  { POSTFIX }
+| '='             { EQUALS }
+| ';'             { SEMI }
 | '('             { LPAREN }
 | ')'             { RPAREN }
 | ','             { COMMA }

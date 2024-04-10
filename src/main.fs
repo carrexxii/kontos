@@ -1,16 +1,37 @@
 ﻿module Main
 
-open System
+open System.IO
 open FSharp.Text
 open FSharp.Text.Lexing
-open Lexer
-open Parser
+
+let lex =
+    LexBuffer<_>.FromTextReader
+
+let parse lexbuf =
+    try Parser.start Lexer.tokenize lexbuf
+    with exn ->
+        let pos = lexbuf.EndPos
+        let tk  = System.String lexbuf.Lexeme
+        printfn $"Parse failed at line {pos.Line}, column {pos.Column}:"
+        printfn $"Last token: \"{tk}\""
+        printfn $"\t{exn.Message}"
+        exit 1
+
+let testLexer () =
+    use reader = new StreamReader "tests/test.kon"
+    let lexbuf = lex reader
+    while not lexbuf.IsPastEndOfStream do
+        printfn $"({Lexer.tokenize lexbuf})"
+
+let testParser () =
+    use reader = new StreamReader "tests/test.kon"
+    let lexbuf = lex reader
+    let ast = parse lexbuf
+    printfn $"{ast}"
 
 [<EntryPoint>]
 let main argv =
-    let testFile = IO.File.ReadAllText "tests/test.kon"
-    let lexbuf = LexBuffer<char>.FromString testFile
-    while not lexbuf.IsPastEndOfStream do
-        printfn $"({tokenize lexbuf}) "
-
+    testLexer ()
+    printfn ""
+    testParser ()
     0
