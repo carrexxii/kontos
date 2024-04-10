@@ -8,14 +8,20 @@ let getOp op =
     | _ -> failwith "unknown operator"
 %}
 
-%token <int> Number
+%token <int64>  INT
+%token <float>  FLT
+%token <string> STR
 %token <string> OP
-%token EOF LPAREN RPAREN
+%token <string> IDENT
+%token FUN VAL VAR
+%token PREFIX INFIX POSTFIX
+%token LPAREN RPAREN COMMA
+%token EOL EOF
 %start parse
-%type <int> parse
+%type <int64> parse
 %%
 
 parse: expr EOF        	 { $1 }
-expr: Number             { $1 }
+expr: INT                { $1 }
     | expr OP expr       { $1 |> (getOp $2) <| $3 }
     | LPAREN expr RPAREN { $2 }

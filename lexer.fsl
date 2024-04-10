@@ -1,19 +1,50 @@
 {
+open System.Text
 open FSharp.Text.Lexing
 open Parser
 
 let lexeme lexbuf = LexBuffer<_>.LexemeString lexbuf
+
+let keywords =
+    [ "fun", FUN
+      "val", VAL
+      "var", VAR ]
+    |> Map.ofList
 }
 
-let digit      = ['0'-'9']
-let operator   = ['+' '-' '*' '/']
-let whitespace = [' ' '\t']
+let digit = ['0'-'9']
+let char  = ['a'-'z' 'A'-'Z']
+let prefixSymbols  = ['$' '~']
+let postfixSymbols = ['!' '?']
+let infixSymbols   = ['*' '+' '-' '/' '=' '>' '<' '\\' '@' '%' '^' '&' '|' ':']
+// let delimitSymbols = [ '(', ')' '`', '`' '[', ']' '{', '}' '"', '"' ''', ''' ]
+
+let integer     = '-'? digit+
+let float       = '-'? digit+ '.' digit+
+let binary      = '0' 'b' digit+
+let hexadecimal = '0' 'x' digit+
+let string      = '"' [^'"']* '"'
+
+let identifier  = char (char | digit | ['_' '-'])+
+let symbol      = (prefixSymbol | infixSymbol | postfixSymbol)+
+let whitespace  = [' ' '\t']
+let newline     = ['\n']
+let compiler    = '#' char(char | '_')+
 
 rule tokenize = parse
-| whitespace   { tokenize lexbuf }
-| ['-']?digit+ { Number (System.Int32.Parse (lexeme lexbuf)) }
-| operator     { OP (lexeme lexbuf) }
-| '('          { LPAREN }
-| ')'          { RPAREN }
-| eof          { EOF }
-| _            { lexeme lexbuf |> failwith $"Parsing error: {lexbuf}" }
+| whitespace      { tokenize lexbuf }
+| integer         { INT (System.Int64.Parse  (lexeme lexbuf)) }
+| float           { FLT (System.Double.Parse (lexeme lexbuf)) }
+| string          { STR (lexeme lexbuf) }
+| identifier      { match keywords.TryFind (lexeme lexbuf) with
+                   | Some token -> token
+                   | None       -> IDENT (lexeme lexbuf) }
+| prefixSymbols   { PREFIX }
+| infixSymbols    { INFIX }
+| postfixSymbols  { POSTFIX }
+| '('             { LPAREN }
+| ')'             { RPAREN }
+| ','             { COMMA }
+| newline         { EOL }
+| eof             { EOF }
+| _               { lexeme lexbuf |> failwith $"Parsing error: {lexbuf}" }
