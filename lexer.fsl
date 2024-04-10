@@ -6,14 +6,15 @@ open Parser
 let lexeme lexbuf = LexBuffer<_>.LexemeString lexbuf
 
 let keywords =
-    [ "fun", FUN
-      "val", VAL
-      "var", VAR ]
+    [ "fun"   , FUN   ; "val"  , VAL  ; "var" , VAR ; "case", CASE; "of"  , OF
+      "int"   , INT   ; "real" , REAL ; "bool", BOOL; "unit", UNIT
+      "true"  , TRUE  ; "false", FALSE; "and" , AND ; "or"  , OR  ; "not" , NOT
+      "module", MODULE; "type" , TYPE ; ]
     |> Map.ofList
 }
 
 let digit = ['0'-'9']
-let char  = ['a'-'z' 'A'-'Z']
+let alpha = ['a'-'z' 'A'-'Z']
 let prefixSymbols  = ['$' '~']
 let postfixSymbols = ['!' '?']
 let infixSymbols   = ['*' '+' '-' '/' '>' '<' '\\' '@' '%' '^' '&' '|' ':']
@@ -25,29 +26,44 @@ let binary      = '0' 'b' digit+
 let hexadecimal = '0' 'x' digit+
 let string      = '"' [^'"']* '"'
 
-let identifier  = char (char | digit | ['_' '-'])+
+let identifier  = alpha (alpha | digit | ['_' '-' '''])*
 let symbol      = (prefixSymbol | infixSymbol | postfixSymbol)+
 let whitespace  = [' ' '\t']
-let newline     = ['\n']
-let compiler    = '#' char(char | '_')+
+let newline     = ('\n' | '\r' '\n')
+let compiler    = '#' alpha(alpha | '_')+
 
 rule tokenize = parse
-| whitespace|newline     { tokenize lexbuf }
-| integer         { INT (System.Int64.Parse  (lexeme lexbuf)) }
-| float           { FLT (System.Double.Parse (lexeme lexbuf)) }
+| whitespace      { tokenize lexbuf }
+| float           { REALLIT (System.Double.Parse (lexeme lexbuf)) }
+| integer         { INTLIT  (System.Int64.Parse  (lexeme lexbuf)) }
 | string          { let str = lexeme lexbuf
-                    STR str[1..str.Length - 2] }
+                    STRINGLIT str[1..str.Length - 2] }
 | identifier      { match keywords.TryFind (lexeme lexbuf) with
                    | Some token -> token
                    | None       -> IDENT (lexeme lexbuf) }
-| prefixSymbols   { PREFIX }
-| infixSymbols    { INFIX }
+| '='             { EQUALS  }
+| '<' '-'         { STORE   }
+| '-' '>'         { ARROW   }
+| ';'             { SEMI    }
+| ':'             { COLON   }
+| '|'             { GUARD   }
+| '('             { LPAREN  }
+| ')'             { RPAREN  }
+| ','             { COMMA   }
+| '+'             { ADD     }
+| '-'             { SUB     }
+| '*'             { ASTER   }
+| '/'             { DIV     }
+| '<' '>'         { NE      }
+| '>'             { GT      }
+| '<'             { LT      }
+| '>' '='         { GTE     }
+| '<' '='         { LTE     }
+| prefixSymbols   { PREFIX  }
+| infixSymbols    { INFIX   }
 | postfixSymbols  { POSTFIX }
-| '='             { EQUALS }
-| ';'             { SEMI }
-| '('             { LPAREN }
-| ')'             { RPAREN }
-| ','             { COMMA }
-| newline         { EOL }
+| newline         { lexbuf.EndPos <- lexbuf.EndPos.NextLine
+                    tokenize lexbuf }
+                    // EOL }
 | eof             { EOF }
-| _               { lexeme lexbuf |> failwith $"Parsing error: {lexbuf}" }
+| _               { failwith $"Failed to parse \"{lexeme lexbuf}\"" }

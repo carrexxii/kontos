@@ -1,2 +1,13 @@
 fun main =
     print "Hello, World!"
+
+val x: int  = 1
+val y: real = 2
+
+fun f x y =
+    case x of
+      0 -> 0
+    | y -> y
+
+val a = f y x
+val b = f x y

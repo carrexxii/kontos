@@ -2,14 +2,24 @@
     open Ast
 %}
 
-%token <int64>  INT
-%token <float>  FLT
-%token <string> STR
+%token <int64>  INTLIT
+%token <float>  REALLIT
+%token <char>   CHARLIT
+%token <bool>   BOOLLIT
+%token <unit>   UNITLIT
+%token <string> STRINGLIT
+
+%token INT REAL BOOL UNIT STRING
+%token FUN VAL VAR CASE OF
+%token TRUE FALSE AND OR NOT
+%token MODULE TYPE
+
+%token PREFIX INFIX POSTFIX
+%token EQUALS STORE SEMI COLON GUARD LPAREN RPAREN COMMA ARROW
+%token ADD SUB ASTER DIV
+%token NE GT LT GTE LTE
 
 %token <string> IDENT
-%token FUN VAL VAR
-%token PREFIX INFIX POSTFIX
-%token EQUALS SEMI LPAREN RPAREN COMMA
 %token EOL EOF
 
 %start start
@@ -18,30 +28,54 @@
 
 start: stmtList EOF { $1 }
 
+typeName:
+    | INT    { KInt       }
+    | REAL   { KReal      }
+    | BOOL   { KBool      }
+    | UNIT   { KUnit      }
+    | STRING { KString    }
+    | IDENT  { KCustom $1 }
+
 stmt:
-    // | VAL IDENT EQUALS expr { $2 }
-    | function              { FunStmt $1 }
+    | val      { $1         }
+    | function { FunStmt $1 }
 
 stmtList:
-    |               { [] }
-    | stmt          { [$1] }
+    |               { []       }
+    | stmt          { [$1]     }
     | stmtList stmt { $2 :: $1 }
 
-function:
-    FUN IDENT identList EQUALS expr { Ast.Function ($2, $5) }
+val:
+    | VAL IDENT EQUALS expr                { ValStmt ($2, KNone, $4) }
+    | VAL IDENT COLON typeName EQUALS expr { ValStmt ($2, $4   , $6) }
+
+function: FUN IDENT identList EQUALS expr { Ast.Function ($2, $5) }
 
 identList:
-    |                 { [] }
-    | IDENT           { [$1] }
+    |                 { []       }
+    | IDENT           { [$1]     }
     | identList IDENT { $2 :: $1 }
 
 expr:
-    | INT            { IntLit $1 }
-    | FLT            { FltLit $1 }
-    | STR            { StrLit $1 }
-    | IDENT exprList { FunCall ($1, $2) }
+    | INTLIT                 { IntLit $1        }
+    | REALLIT                { FltLit $1        }
+    | STRINGLIT              { StrLit $1        }
+    | IDENT exprList         { FunCall ($1, $2) }
+    | CASE expr OF guardList { Case ($2, $4)    }
 
 exprList:
-    |                    { [] }
-    | expr               { [$1] }
+    |                    { []       }
+    | expr               { [$1]     }
     | exprList SEMI expr { $3 :: $1 }
+
+commaList:
+    |                      { []       }
+    | expr                 { [$1]     }
+    | commaList COMMA expr { $3 :: $1 }
+
+guardList:
+    |                      { []       }
+    // | expr                 { [$1]     }
+    // | GUARD guardList      { $2       }
+    | guardList       expr ARROW expr { ($2, $4) :: $1 }
+    | guardList GUARD expr ARROW expr { ($3, $5) :: $1 }
