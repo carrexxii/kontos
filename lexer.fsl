@@ -9,7 +9,7 @@ let keywords =
     [ "fun"   , FUN   ; "val"  , VAL  ; "var" , VAR ; "case", CASE; "of"  , OF
       "int"   , INT   ; "real" , REAL ; "bool", BOOL; "unit", UNIT
       "true"  , TRUE  ; "false", FALSE; "and" , AND ; "or"  , OR  ; "not" , NOT
-      "module", MODULE; "type" , TYPE ; ]
+      "module", MODULE; "type" , TYPE ; "end" , END ]
     |> Map.ofList
 }
 
@@ -18,13 +18,11 @@ let alpha = ['a'-'z' 'A'-'Z']
 let prefixSymbols  = ['$' '~']
 let postfixSymbols = ['!' '?']
 let infixSymbols   = ['*' '+' '-' '/' '>' '<' '\\' '@' '%' '^' '&' '|' ':']
-// let delimitSymbols = [ '(', ')' '`', '`' '[', ']' '{', '}' '"', '"' ''', ''' ]
 
 let integer     = '-'? digit+
 let float       = '-'? digit+ '.' digit+
 let binary      = '0' 'b' digit+
 let hexadecimal = '0' 'x' digit+
-let string      = '"' [^'"']* '"'
 
 let identifier  = alpha (alpha | digit | ['_' '-' '''])*
 let symbol      = (prefixSymbol | infixSymbol | postfixSymbol)+
@@ -33,37 +31,47 @@ let newline     = ('\n' | '\r' '\n')
 let compiler    = '#' alpha(alpha | '_')+
 
 rule tokenize = parse
-| whitespace      { tokenize lexbuf }
-| float           { REALLIT (System.Double.Parse (lexeme lexbuf)) }
-| integer         { INTLIT  (System.Int64.Parse  (lexeme lexbuf)) }
-| string          { let str = lexeme lexbuf
-                    STRINGLIT str[1..str.Length - 2] }
-| identifier      { match keywords.TryFind (lexeme lexbuf) with
-                   | Some token -> token
-                   | None       -> IDENT (lexeme lexbuf) }
-| '='             { EQUALS  }
-| '<' '-'         { STORE   }
-| '-' '>'         { ARROW   }
-| ';'             { SEMI    }
-| ':'             { COLON   }
-| '|'             { GUARD   }
-| '('             { LPAREN  }
-| ')'             { RPAREN  }
-| ','             { COMMA   }
-| '+'             { ADD     }
-| '-'             { SUB     }
-| '*'             { ASTER   }
-| '/'             { DIV     }
-| '<' '>'         { NE      }
-| '>'             { GT      }
-| '<'             { LT      }
-| '>' '='         { GTE     }
-| '<' '='         { LTE     }
-| prefixSymbols   { PREFIX  }
-| infixSymbols    { INFIX   }
-| postfixSymbols  { POSTFIX }
-| newline         { lexbuf.EndPos <- lexbuf.EndPos.NextLine
-                    tokenize lexbuf }
-                    // EOL }
-| eof             { EOF }
-| _               { failwith $"Failed to parse \"{lexeme lexbuf}\"" }
+    | whitespace      { tokenize lexbuf }
+    | '/' '/'         { readComment lexbuf }
+    | float           { REALLIT (System.Double.Parse (lexeme lexbuf)) }
+    | integer         { INTLIT  (System.Int64.Parse  (lexeme lexbuf)) }
+    | identifier      { match keywords.TryFind (lexeme lexbuf) with
+                       | Some token -> token
+                       | None       -> IDENT (lexeme lexbuf) }
+    | '"'             { readString "" false lexbuf }
+    | '<' '-'         { LARROW  }
+    | '-' '>'         { RARROW  }
+    | ';'             { SEMI    }
+    | ':'             { COLON   }
+    | '|'             { GUARD   }
+    | '('             { LPAREN  }
+    | ')'             { RPAREN  }
+    | ','             { COMMA   }
+    | '+'             { ADD     }
+    | '-'             { SUB     }
+    | '*'             { ASTER   }
+    | '/'             { DIV     }
+    | '='             { EQUALS  }
+    | '<' '>'         { NE      }
+    | '>'             { GT      }
+    | '<'             { LT      }
+    | '>' '='         { GTE     }
+    | '<' '='         { LTE     }
+    | prefixSymbols   { PREFIX  }
+    | infixSymbols    { INFIX   }
+    | postfixSymbols  { POSTFIX }
+    | newline         { lexbuf.EndPos <- lexbuf.EndPos.NextLine
+                        // tokenize lexbuf }
+                        EOL }
+    | eof             { EOF }
+    | _               { failwith $"Failed to parse \"{lexeme lexbuf}\"" }
+and readString str ignoreQuote = parse
+    | '"'           { if ignoreQuote then (readString $"{str}\\\"" false lexbuf) else STRINGLIT str }
+    | '\\'          { readString str true lexbuf                                                    }
+    | [^ '"' '\\']+ { readString (str + (lexeme lexbuf)) false lexbuf                               }
+    | eof           { raise (System.Exception "Error: non-terminated string literal")               }
+and readComment = parse
+    | newline { lexbuf.EndPos <- lexbuf.EndPos.NextLine
+                EOL }
+    | eof     { EOF }
+    | _       { readComment lexbuf }

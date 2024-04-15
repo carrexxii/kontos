@@ -13,9 +13,8 @@ let rec outputExpr = function
     | IntLit x -> printfn $"push {x}"
     | FltLit x -> printfn $"push {x}"
     | StrLit x -> printfn $"push \"{x}\""
-    | FunCall (ident, exprs) ->
-        List.iter (fun expr -> outputExpr expr) exprs
-        printfn $"call {ident}"
+    // | IdentList idents ->
+        // printfn $"idents: {idents}"
     | x -> failwith $"ouputExpr not implemented for \"{x}\""
 
 let outputAssign ident expr =
@@ -26,8 +25,7 @@ let outputFun ident expr =
     outputExpr expr
 
 let outputStmt = function
-    | Assign (ident, expr) -> outputAssign ident expr
-    | FunStmt (Function (ident, expr)) -> outputFun ident expr
+    | NOPStmt -> ()
 
 let ofAst (ast: Stmt list) =
     List.iter outputStmt ast

@@ -12,10 +12,10 @@
 %token INT REAL BOOL UNIT STRING
 %token FUN VAL VAR CASE OF
 %token TRUE FALSE AND OR NOT
-%token MODULE TYPE
+%token MODULE TYPE END
 
 %token PREFIX INFIX POSTFIX
-%token EQUALS STORE SEMI COLON GUARD LPAREN RPAREN COMMA ARROW
+%token EQUALS STORE SEMI COLON GUARD LPAREN RPAREN COMMA LARROW RARROW
 %token ADD SUB ASTER DIV
 %token NE GT LT GTE LTE
 
@@ -28,7 +28,7 @@
 
 start: stmtList EOF { $1 }
 
-typeName:
+kType:
     | INT    { KInt       }
     | REAL   { KReal      }
     | BOOL   { KBool      }
@@ -36,46 +36,48 @@ typeName:
     | STRING { KString    }
     | IDENT  { KCustom $1 }
 
-stmt:
-    | val      { $1         }
-    | function { FunStmt $1 }
+literal:
+    | INTLIT    { IntLit $1 }
+    | REALLIT   { FltLit $1 }
+    | STRINGLIT { StrLit $1 }
 
+stmt:
+    | EOL      { NOPStmt    }
+    | val      { ValStmt $1 }
+    | var      { VarStmt $1 }
+    | function { FunStmt $1 }
 stmtList:
     |               { []       }
     | stmt          { [$1]     }
     | stmtList stmt { $2 :: $1 }
 
 val:
-    | VAL IDENT EQUALS expr                { ValStmt ($2, KNone, $4) }
-    | VAL IDENT COLON typeName EQUALS expr { ValStmt ($2, $4   , $6) }
+    | VAL IDENT OF kType EQUALS expr EOL { val' $2 $4 $6        }
+    | VAL IDENT EQUALS expr EOL          { val' $2 KInferred $4 }
 
-function: FUN IDENT identList EQUALS expr { Ast.Function ($2, $5) }
+var:
+    | VAR IDENT OF kType EQUALS expr EOL { var $2 $4 $6        }
+    | VAR IDENT EQUALS expr EOL          { var $2 KInferred $4 }
 
+function:
+    | FUN IDENT COLON identList RARROW exprList END { fun' $2 $4 $6 KInferred }
+    | FUN IDENT RARROW exprList END                 { fun' $2 [] $4 KInferred }
+
+ident:
+    | IDENT                           { ident $1 KInferred }
+    | LPAREN IDENT COLON kType RPAREN { ident $2 $4        }
 identList:
     |                 { []       }
-    | IDENT           { [$1]     }
-    | identList IDENT { $2 :: $1 }
+    | ident           { [$1]     }
+    | identList ident { $2 :: $1 }
 
 expr:
-    | INTLIT                 { IntLit $1        }
-    | REALLIT                { FltLit $1        }
-    | STRINGLIT              { StrLit $1        }
-    | IDENT exprList         { FunCall ($1, $2) }
-    | CASE expr OF guardList { Case ($2, $4)    }
-
+    | EOL       { NOPExpr      }
+    | literal   { Literal $1   }
+    | function  { FunExpr $1   }
+    | ident     { Ident $1     }
+    | identList { IdentList $1 }
 exprList:
-    |                    { []       }
-    | expr               { [$1]     }
-    | exprList SEMI expr { $3 :: $1 }
-
-commaList:
-    |                      { []       }
-    | expr                 { [$1]     }
-    | commaList COMMA expr { $3 :: $1 }
-
-guardList:
-    |                      { []       }
-    // | expr                 { [$1]     }
-    // | GUARD guardList      { $2       }
-    | guardList       expr ARROW expr { ($2, $4) :: $1 }
-    | guardList GUARD expr ARROW expr { ($3, $5) :: $1 }
+    |               { []       }
+    | expr          { [$1]     }
+    | exprList expr { $2 :: $1 }

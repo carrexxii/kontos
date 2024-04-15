@@ -1,13 +1,15 @@
-fun main =
+// Comment
+fun main: args ->
     print "Hello, World!"
+end
 
-val x: int  = 1
-val y: real = 2
+val x of int   = 7
+var z of float = 11
+val y = 7
+var w = 13
 
-fun f x y =
-    case x of
-      0 -> 0
-    | y -> y
-
-val a = f y x
-val b = f x y
+fun test_inline1 -> 1 end
+fun test_inline2 -> return 1 end
+fun test ->
+    print "a" "b" "c"
+end

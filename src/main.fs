@@ -24,16 +24,18 @@ let testLexer () =
         printfn $"({Lexer.tokenize lexbuf})"
 
 let testParser () =
-    use reader = new StreamReader "tests/test.kon"
-    let lexbuf = lex reader
-    let ast = parse lexbuf
-    List.iter (fun x -> printfn $"{x}") (List.rev ast)
+    new StreamReader "tests/test.kon"
+    |> lex
+    |> parse
+    |> List.rev
+    |> List.iter (fun x -> printfn $"{x}")
 
 [<EntryPoint>]
 let main argv =
     testLexer ()
-    printfn ""
+    printfn " - - - - - - - - - - - - -"
     testParser ()
+    printfn " - - - - - - - - - - - - -"
 
     // new StreamReader "tests/test.kon"
     // |> lex
