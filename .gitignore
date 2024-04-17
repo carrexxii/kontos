@@ -1,6 +1,2 @@
-bin/
-obj/
-src/lexer.fs
-src/lexer.fsi
-src/parser.fs
-src/parser.fsi
+_build/
+src/*.conflicts

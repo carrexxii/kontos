@@ -1,0 +1,12 @@
+(menhir
+  (modules parser)
+  (flags --explain --inspection --table --dump)
+  (infer true))
+
+(ocamllex lexer)
+
+(executable
+  (public_name kontos)
+  (name main)
+  (libraries core menhirLib)
+  (preprocess (pps ppx_jane)))
