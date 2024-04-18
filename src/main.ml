@@ -11,7 +11,7 @@ let parse_ast s =
 	parse' Parser.ast s
 
 let () =
-	In_channel.create "tests/test.kon"
+	In_channel.create "tests/syntax-test.kon"
 	|> parse_ast
 	|> string_of_ast
 	|> print_endline

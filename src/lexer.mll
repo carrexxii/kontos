@@ -54,10 +54,16 @@ rule read = parse
 	| '"'             { Buffer.clear string_buf;
 	                    STRLIT (read_string lexbuf) }
 
-	| '(' ')'         { UNIT   }
-	| '='             { EQUALS }
-	| '-' '>'         { RARROW }
+	| '(' ')' { UNIT   }
+	| '='     { EQUALS }
+	| '-' '>' { RARROW }
+	| ':'     { COLON  }
 
+	| "int"    { INT    }
+	| "string" { STRING }
+	| "real"   { REAL   }
+	| "bool"   { BOOL   }
+	| "unit"   { UNIT   }
 
 	| "val"           { VAL }
 	| "var"           { VAR }

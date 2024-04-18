@@ -2,14 +2,14 @@
     open Ast
 %}
 
+%token INT STRING REAL BOOL UNIT
 %token <int64>  INTLIT
 %token <float>  FLTLIT
 %token <string> STRLIT
 %token <string> IDENT
-%token UNIT
 
 %token VAL VAR FUN END
-%token RARROW
+%token RARROW COLON
 %token EQUALS
 
 %token EOF
@@ -30,10 +30,20 @@ expr:
 	| literal                      { Literal $1 }
 	| FUN ident* RARROW decl* expr { FunExpr (kfun $2 $4 $5) }
 
-ident: IDENT { kident $1 }
+ident:
+	| IDENT             { kident $1 KInfer }
+	| IDENT COLON ktype { kident $1 $3     }
 
 literal:
 	| UNIT   { UnitLit   }
 	| INTLIT { IntLit $1 }
 	| FLTLIT { FltLit $1 }
 	| STRLIT { StrLit $1 }
+
+ktype:
+	| INT    { KInt       }
+	| STRING { KString    }
+	| REAL   { KReal      }
+	| BOOL   { KBool      }
+	| UNIT   { KUnit      }
+	| IDENT  { KCustom $1 }

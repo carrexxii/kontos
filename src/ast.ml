@@ -2,6 +2,10 @@ open Core
 
 type ast = decl list
 
+and ident =
+	{ name : string;
+	  type': ktype; }
+
 and fun_expr =
 	{ params: ident list;
 	  decls : decl list;
@@ -34,8 +38,7 @@ and ktype =
 	| KBool
 	| KUnit
 	| KInfer
-	| KCustom of ident
-	| KUnknown
+	| KCustom of string
 
 and literal =
 	| UnitLit
@@ -44,13 +47,11 @@ and literal =
 	| BlnLit of bool
 	| StrLit of string
 
-and ident =
-	{ name : string }
-
 (* -------------------------------------------------------------------- *)
 
-let kident name =
-	{ name = name; }
+let kident name type' =
+	{ name  = name;
+	  type' = type'; }
 
 let kval ident expr =
 	({ ident = ident;
@@ -71,6 +72,15 @@ let string_of_ast ast =
 	let string_of_ident_list =
 		List.fold ~init:"" ~f:(fun acc id -> id.name ^ acc)
 	in
+	let string_of_type = function
+		| KInt       -> "int"
+		| KReal      -> "real"
+		| KString    -> "string"
+		| KBool      -> "bool"
+		| KUnit      -> "unit"
+		| KInfer     -> "<infer>"
+		| KCustom id -> id
+	in
 	let rec string_of_expr = function
 		| Literal lit -> begin
 			match lit with
@@ -80,15 +90,15 @@ let string_of_ast ast =
 			| StrLit x -> "\"" ^ x ^ "\""
 			| _ -> "<Unknown literal>"
 			end
-		| Ident {name} -> sprintf "$%s" name
+		| Ident {name; type'} -> sprintf "(%s: %s)" name (string_of_type type')
 		| FunExpr f -> sprintf "(fun (%s) -> %s (%s))"
 		                       (string_of_ident_list f.params)
 		                       (string_of_decl_list f.decls)
 		                       (string_of_expr f.body)
 		| _ -> "<Unknown literal>"
 	and string_of_decl = function
-		| ValDecl kval -> sprintf "(val \"%s\" = %s)" kval.ident.name (string_of_expr kval.expr)
-		| VarDecl kvar -> sprintf "(var \"%s\" = %s)" kvar.ident.name (string_of_expr kvar.expr)
+		| ValDecl kval -> sprintf "(val \"%s\": %s = %s)" kval.ident.name (string_of_type kval.ident.type') (string_of_expr kval.expr)
+		| VarDecl kvar -> sprintf "(var \"%s\": %s = %s)" kvar.ident.name (string_of_type kvar.ident.type') (string_of_expr kvar.expr)
 		(* | _ -> "<Unknown statement>" *)
 	and string_of_decl_list decls =
 		List.map decls ~f:string_of_decl
