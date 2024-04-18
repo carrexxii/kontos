@@ -11,7 +11,13 @@ let parse_ast s =
 	parse' Parser.ast s
 
 let () =
-	In_channel.create "tests/syntax-test.kon"
-	|> parse_ast
+	let ast =
+		In_channel.create "tests/syntax-test.kon"
+		|> parse_ast
+	in
+	ast
 	|> string_of_ast
 	|> print_endline
+
+	;print_endline "\n- - - - - - - - ";
+	Genc.gen "tests/test.c" ast

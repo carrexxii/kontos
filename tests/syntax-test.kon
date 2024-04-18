@@ -1,17 +1,17 @@
 // Comment
 val x = 5
-val x = "abc"
-val x = 5.3
-val x: int    = 5
-val x: string = "abc"
-val x: real   = 5.3
+// val y = "abc"
+val z = 5.3
+val a: int    = 5
+// val b: string = "abc"
+val c: real   = 5.3
 
-var y = 5
-var y = "abc"
-var y = 5.3
-var y: int    = 5
-var y: string = "abc"
-var y: real   = 5.3
+var d = 5
+// var e = "abc"
+var f = 5.3
+var i: int    = 5
+// var j: string = "abc"
+var k: real   = 5.3
 
 val f1 = fun args ->
 	val a = 33

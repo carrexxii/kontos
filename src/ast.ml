@@ -11,17 +11,17 @@ and fun_expr =
 	  decls : decl list;
 	  body  : expr; }
 
-and val_expr =
+and val_decl =
 	{ ident: ident;
 	  expr : expr; }
 
-and var_expr =
+and var_decl =
 	{ ident: ident;
 	  expr : expr; }
 
 and decl =
-	| ValDecl of val_expr
-	| VarDecl of var_expr
+	| ValDecl of val_decl
+	| VarDecl of var_decl
 
 and expr =
 	| FunExpr    of fun_expr
@@ -37,6 +37,7 @@ and ktype =
 	| KString
 	| KBool
 	| KUnit
+	| KFun of ktype
 	| KInfer
 	| KCustom of string
 
@@ -55,11 +56,11 @@ let kident name type' =
 
 let kval ident expr =
 	({ ident = ident;
-	   expr  = expr; }: val_expr)
+	   expr  = expr; }: val_decl)
 
 let kvar ident expr =
 	({ ident = ident;
-	   expr  = expr; }: var_expr)
+	   expr  = expr; }: var_decl)
 
 let kfun params decls body =
 	{ params = params;
@@ -68,28 +69,29 @@ let kfun params decls body =
 
 (* -------------------------------------------------------------------- *)
 
+let rec string_of_type = function
+	| KInt       -> "kint"
+	| KReal      -> "kreal"
+	| KString    -> "kstring"
+	| KBool      -> "kbool"
+	| KUnit      -> "kunit"
+	| KFun rtype -> "kfun" ^ (string_of_type rtype)
+	| KInfer     -> "auto"
+	| KCustom id -> id
+
+let string_of_literal = function
+	| UnitLit  -> "NULL"
+	| IntLit x -> Int64.to_string x
+	| FltLit x -> string_of_float x
+	| StrLit x -> "\"" ^ x ^ "\""
+	| _ -> "<Unknown literal>"
+
 let string_of_ast ast =
 	let string_of_ident_list =
 		List.fold ~init:"" ~f:(fun acc id -> id.name ^ acc)
 	in
-	let string_of_type = function
-		| KInt       -> "int"
-		| KReal      -> "real"
-		| KString    -> "string"
-		| KBool      -> "bool"
-		| KUnit      -> "unit"
-		| KInfer     -> "<infer>"
-		| KCustom id -> id
-	in
 	let rec string_of_expr = function
-		| Literal lit -> begin
-			match lit with
-			| UnitLit  -> "()"
-			| IntLit x -> Int64.to_string x
-			| FltLit x -> string_of_float x
-			| StrLit x -> "\"" ^ x ^ "\""
-			| _ -> "<Unknown literal>"
-			end
+		| Literal lit -> string_of_literal lit
 		| Ident {name; type'} -> sprintf "(%s: %s)" name (string_of_type type')
 		| FunExpr f -> sprintf "(fun (%s) -> %s (%s))"
 		                       (string_of_ident_list f.params)
