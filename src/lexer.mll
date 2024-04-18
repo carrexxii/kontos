@@ -45,7 +45,8 @@ let escapes    = ['n']
 
 rule read = parse
     | whitespace+     { read lexbuf }
-    | newline         { new_line lexbuf; EOL }
+    | newline         { new_line lexbuf;
+	                    read lexbuf }
     | '/' '/'         { read_comment lexbuf }
 
     | float           { FLTLIT (float_of_string (lexeme lexbuf)) }
@@ -53,10 +54,15 @@ rule read = parse
 	| '"'             { Buffer.clear string_buf;
 	                    STRLIT (read_string lexbuf) }
 
+	| '(' ')'         { UNIT   }
+	| '='             { EQUALS }
+	| '-' '>'         { RARROW }
+
+
 	| "val"           { VAL }
 	| "var"           { VAR }
-
-	| '='             { EQUALS }
+	| "fun"           { FUN }
+	| "end"           { END }
 
     | identifier      { IDENT (lexeme lexbuf) }
     | eof             { EOF }
@@ -68,6 +74,7 @@ and read_string = parse
 	| _ as c                { Buffer.add_char string_buf c;
 	                          read_string lexbuf }
 and read_comment = parse
-    | newline { new_line lexbuf; EOL }
+    | newline { new_line lexbuf;
+	            read lexbuf }
     | eof     { EOF                  }
     | _       { read_comment lexbuf  }

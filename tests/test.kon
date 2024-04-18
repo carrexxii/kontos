@@ -6,3 +6,11 @@ val x = 5.3
 var y = 5
 var y = "abc"
 var y = 5.3
+
+val f = fun args ->
+	val a = 33
+	a
+
+fun g args ->
+	var a = 77
+	a

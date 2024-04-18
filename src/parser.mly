@@ -6,33 +6,34 @@
 %token <float>  FLTLIT
 %token <string> STRLIT
 %token <string> IDENT
+%token UNIT
 
-%token VAL VAR
+%token VAL VAR FUN END
+%token RARROW
 %token EQUALS
 
-%token EOL EOF
+%token EOF
 
 %start ast
 %type <ast> ast
 %%
 
-ast: stmt* EOF { $1 }
+ast: decl* EOF { $1 }
 
-stmt:
-	| EOL      { NOPStmt    }
-	| val_stmt { ValStmt $1 }
-	| var_stmt { VarStmt $1 }
+decl:
+	| VAL ident EQUALS expr              { ValDecl (kval $2 $4) }
+	| VAR ident EQUALS expr              { VarDecl (kvar $2 $4) }
+	| FUN ident ident* RARROW decl* expr { ValDecl (kval $2 (FunExpr (kfun $3 $5 $6))) }
 
 expr:
-	| ident   { Ident $1 }
-	| literal { Literal $1 }
-
-val_stmt: VAL ident EQUALS expr EOL { kval $2 $4 }
-var_stmt: VAR ident EQUALS expr EOL { kvar $2 $4 }
+	| ident                        { Ident   $1 }
+	| literal                      { Literal $1 }
+	| FUN ident* RARROW decl* expr { FunExpr (kfun $2 $4 $5) }
 
 ident: IDENT { kident $1 }
 
 literal:
+	| UNIT   { UnitLit   }
 	| INTLIT { IntLit $1 }
 	| FLTLIT { FltLit $1 }
 	| STRLIT { StrLit $1 }
