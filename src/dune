@@ -9,4 +9,6 @@
   (public_name kontos)
   (name main)
   (libraries core menhirLib)
-  (preprocess (pps ppx_jane)))
+  (preprocess (pps ppx_jane))
+  (flags (:standard -warn-error "-unused-value-declaration"
+          :standard -warn-error "-unused-open")))

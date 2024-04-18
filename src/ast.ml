@@ -74,12 +74,16 @@ let string_of_ast ast =
 		| Literal lit -> begin
 			match lit with
 			| IntLit x -> Int64.to_string x
+			| FltLit x -> string_of_float x
+			| StrLit x -> "\"" ^ x ^ "\""
 			| _ -> "<Unknown literal>"
 			end
 		| _ -> "<Unknown literal>"
 	in
 	let string_of_stmt = function
+		| NOPStmt      -> ""
 		| ValStmt kval -> sprintf "(val \"%s\" = %s)\n" kval.ident.name (string_of_expr kval.expr)
+		| VarStmt kvar -> sprintf "(var \"%s\" = %s)\n" kvar.ident.name (string_of_expr kvar.expr)
 		| _ -> "<Unknown statement>"
 	in
 	ast

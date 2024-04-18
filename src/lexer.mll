@@ -1,8 +1,22 @@
 {
     open Lexing
     open Parser
+	open Printf
 
     exception SyntaxError of string
+
+	let set_filename fname lexbuf =
+		lexbuf.Lexing.lex_curr_p <-
+			{ lexbuf.Lexing.lex_curr_p with
+		    	Lexing.pos_fname = fname }
+
+	let position lexbuf =
+		let p = lexbuf.Lexing.lex_curr_p in
+		sprintf "%s:%d:%d" p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol)
+
+	let error lexbuf msg =
+		let msg = position lexbuf ^ " " ^ msg in
+		raise (SyntaxError msg)
 
 	let advance_line lexbuf =
 		let pos = lexbuf.lex_curr_p in
@@ -11,6 +25,8 @@
 				pos_bol  = lexbuf.lex_curr_pos;
 				pos_lnum = pos.pos_lnum + 1 }
 		in lexbuf.lex_curr_p <- pos'
+
+	let string_buf = Buffer.create 256
 }
 
 let digit = ['0'-'9']
@@ -25,27 +41,33 @@ let hexadecimal = '0' 'x' digit+
 let identifier = alpha (alnum | ['_' '-' '''])*
 let whitespace = [' ' '\t']
 let newline    = '\n' | '\r' '\n'
+let escapes    = ['n']
 
 rule read = parse
-    | whitespace      { read lexbuf }
-    | newline         { advance_line lexbuf; EOL }
+    | whitespace+     { read lexbuf }
+    | newline         { new_line lexbuf; EOL }
     | '/' '/'         { read_comment lexbuf }
+
     | float           { FLTLIT (float_of_string (lexeme lexbuf)) }
     | integer         { INTLIT (Int64.of_string (lexeme lexbuf)) }
+	| '"'             { Buffer.clear string_buf;
+	                    STRLIT (read_string lexbuf) }
 
-	| "val"           { VAL   }
+	| "val"           { VAL }
+	| "var"           { VAR }
 
 	| '='             { EQUALS }
 
     | identifier      { IDENT (lexeme lexbuf) }
     | eof             { EOF }
-	| _  { raise (SyntaxError ("Illegal character: " ^ lexeme lexbuf)) }
-and read_string str ignore_quote = parse
-    | '"'           { if ignore_quote then (read_string (str ^ "\\\"") false lexbuf) else STRLIT str }
-    | '\\'          { read_string str true lexbuf                                                    }
-    | [^ '"' '\\']+ { read_string (str ^ (lexeme lexbuf)) false lexbuf                               }
-    | eof           { raise (SyntaxError "Error: non-terminated string literal")                     }
+	| _  { error lexbuf ("Illegal character: " ^ lexeme lexbuf) }
+and read_string = parse
+	| '"'                   { Buffer.contents string_buf }
+	| '\\' (escapes as esc) { Buffer.add_char string_buf esc;
+	                          read_string lexbuf }
+	| _ as c                { Buffer.add_char string_buf c;
+	                          read_string lexbuf }
 and read_comment = parse
-    | newline { advance_line lexbuf; EOL }
-    | eof     { EOF                      }
-    | _       { read_comment lexbuf      }
+    | newline { new_line lexbuf; EOL }
+    | eof     { EOF                  }
+    | _       { read_comment lexbuf  }
