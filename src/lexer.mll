@@ -43,6 +43,9 @@ let whitespace = [' ' '\t']
 let newline    = '\n' | '\r' '\n'
 let escapes    = ['n']
 
+let infix = ['+' '-' '*' '/']
+let operator = infix
+
 rule read = parse
     | whitespace+     { read lexbuf }
     | newline         { new_line lexbuf;
@@ -60,6 +63,7 @@ rule read = parse
 	| '='     { EQUALS }
 	| '-' '>' { RARROW }
 	| ':'     { COLON  }
+	| infix   { INFIX (lexeme lexbuf) }
 
 	| "int"    { INT    }
 	| "string" { STRING }

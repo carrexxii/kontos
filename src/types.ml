@@ -36,6 +36,11 @@ let check ast =
 		| FunExpr fexpr ->
 			let fexpr, type' = type_of_function fexpr in
 			FunExpr fexpr, type'
+		| FunCall (ident, exprs) ->
+			let exprs    = List.map exprs ~f:type_of_expr in
+			let lhs_type = snd (Option.value_exn (List.hd exprs)) in
+			let ident    = { ident with type' = lhs_type } in
+			FunCall (ident, List.map exprs ~f:(fun expr -> fst expr)), ident.type'
 		| x -> Printf.printf "Error: need to fetch type from identifier for expression\n"; x, KInfer
 	and type_of_decl = function
 		| VarDecl { ident; expr } ->

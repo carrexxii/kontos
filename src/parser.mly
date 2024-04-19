@@ -8,6 +8,7 @@
 %token <string> STRLIT
 %token <string> IDENT
 
+%token <string> INFIX
 %token VAL VAR FUN
 %token LPAREN RPAREN
 %token RARROW COLON
@@ -31,6 +32,7 @@ expr:
 	| ident                        { Ident   $1 }
 	| literal                      { Literal $1 }
 	| FUN ident* RARROW decl* expr { FunExpr (kfun $2 $4 $5) }
+	| expr INFIX expr              { kinfix $1 $2 $3         }
 
 ident:
 	| IDENT                           { kident $1 KInfer }

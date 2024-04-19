@@ -8,7 +8,6 @@ let header ="
 typedef int64_t kint;
 typedef double  kreal;
 typedef bool    kbool;
-
 "
 
 let gen output ast =
@@ -25,10 +24,28 @@ let gen output ast =
 			List.iter decls ~f:write_decl;
 			()
 		| Ident ident -> write_str ident.name
-		| FunCall    (ident, expr)         -> write_str "!!"
+		| FunCall    (ident, exprs)        -> write_fun_call ident exprs
 		| Literal    lit                   -> write_str (string_of_literal lit)
 		| UnaryCall  (ident, expr)         -> write_str "!!"
 		| BinaryCall (lexpr, ident, rexpr) -> write_str "!!"
+	and write_fun_call { name; type' } exprs =
+		match name with
+		| "+" | "-" | "*" | "/" ->
+			begin match exprs with
+			| lhs::rhs::[] ->
+				write_expr lhs;
+				write_str name;
+				write_expr rhs
+			| _ -> failwith ""
+			end
+		| name ->
+			write_str name;
+			write_char '(';
+			List.iteri exprs ~f:(fun i expr ->
+				write_expr expr;
+				if i <> List.length exprs - 1 then
+					write_char ',');
+			write_char ')'
 	and write_kvar (kval: var_decl) =
 		let { ident; expr }: var_decl = kval in
 		match expr with

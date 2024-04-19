@@ -1,0 +1,4 @@
+fun main (args: int) ->
+	val x = 5
+	val y = 7
+	x + y

@@ -12,7 +12,7 @@ let parse_ast s =
 
 let () =
 	let ast =
-		In_channel.create "tests/syntax-test.kon"
+		In_channel.create "tests/test1.kon"
 		|> parse_ast
 	in
 	(* ast *)

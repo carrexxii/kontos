@@ -58,6 +58,10 @@ let kfun params decls body =
 	  decls  = decls;
 	  body   = body; }
 
+let kinfix lhs op rhs =
+	let ident = kident op KInfer in
+	FunCall (ident, [lhs; rhs])
+
 (* -------------------------------------------------------------------- *)
 
 let rec string_of_type = function
