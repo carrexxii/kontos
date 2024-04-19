@@ -8,6 +8,6 @@
 (executable
   (public_name kontos)
   (name main)
-  (libraries core menhirLib)
+  (libraries core core_unix.command_unix menhirLib)
   (preprocess (pps ppx_jane))
   (flags (:standard -warn-error "-A")))

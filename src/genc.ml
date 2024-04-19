@@ -2,13 +2,10 @@ open Core
 open Printf
 open Ast
 
-let header ="
-#include <stdint.h>
-#include <stdbool.h>
-typedef int64_t kint;
-typedef double  kreal;
-typedef bool    kbool;
-"
+let header = {|
+#include "kontos.h"
+
+|}
 
 let gen output ast =
 	let buf = Buffer.create 4096 in
