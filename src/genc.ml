@@ -29,8 +29,8 @@ let gen output ast =
 		| Literal    lit                   -> write_str (string_of_literal lit)
 		| UnaryCall  (ident, expr)         -> write_str "!!"
 		| BinaryCall (lexpr, ident, rexpr) -> write_str "!!"
-	and write_kval (kval: val_decl) =
-		let { ident; expr }: val_decl = kval in
+	and write_kvar (kval: var_decl) =
+		let { ident; expr }: var_decl = kval in
 		match expr with
 		| FunExpr { params; decls; body; } ->
 			write_char '\n';
@@ -47,8 +47,7 @@ let gen output ast =
 			write_expr expr;
 			write_str ";\n"
 	and write_decl = function
-		| ValDecl kval -> write_kval kval
-		| VarDecl kvar -> ()
+		| VarDecl kvar -> write_kvar kvar
 	and write_param_list params =
 		write_char '(';
 		List.iteri params ~f:(fun i param ->

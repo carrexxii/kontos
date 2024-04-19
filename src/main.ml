@@ -15,9 +15,13 @@ let () =
 		In_channel.create "tests/syntax-test.kon"
 		|> parse_ast
 	in
-	ast
+	(* ast *)
+	(* |> string_of_ast *)
+	(* |> print_endline *)
+	Types.check ast
 	|> string_of_ast
 	|> print_endline
 
 	;print_endline "\n- - - - - - - - ";
+	let ast = Types.check ast in
 	Genc.gen "tests/test.c" ast

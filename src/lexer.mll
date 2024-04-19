@@ -15,7 +15,7 @@
 		sprintf "%s:%d:%d" p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol)
 
 	let error lexbuf msg =
-		let msg = position lexbuf ^ " " ^ msg in
+		let msg = sprintf "%s %s" (position lexbuf) msg in
 		raise (SyntaxError msg)
 
 	let advance_line lexbuf =
@@ -55,6 +55,8 @@ rule read = parse
 	                    STRLIT (read_string lexbuf) }
 
 	| '(' ')' { UNIT   }
+	| '('     { LPAREN }
+	| ')'     { RPAREN }
 	| '='     { EQUALS }
 	| '-' '>' { RARROW }
 	| ':'     { COLON  }
@@ -65,14 +67,13 @@ rule read = parse
 	| "bool"   { BOOL   }
 	| "unit"   { UNIT   }
 
-	| "val"           { VAL }
-	| "var"           { VAR }
-	| "fun"           { FUN }
-	| "end"           { END }
+	| "val" { VAL }
+	| "var" { VAR }
+	| "fun" { FUN }
 
     | identifier      { IDENT (lexeme lexbuf) }
     | eof             { EOF }
-	| _  { error lexbuf ("Illegal character: " ^ lexeme lexbuf) }
+	| _  { error lexbuf (sprintf "Illegal character: ` %s `" (lexeme lexbuf)) }
 and read_string = parse
 	| '"'                   { Buffer.contents string_buf }
 	| '\\' (escapes as esc) { Buffer.add_char string_buf esc;

@@ -11,16 +11,11 @@ and fun_expr =
 	  decls : decl list;
 	  body  : expr; }
 
-and val_decl =
-	{ ident: ident;
-	  expr : expr; }
-
 and var_decl =
 	{ ident: ident;
 	  expr : expr; }
 
 and decl =
-	| ValDecl of val_decl
 	| VarDecl of var_decl
 
 and expr =
@@ -54,13 +49,9 @@ let kident name type' =
 	{ name  = name;
 	  type' = type'; }
 
-let kval ident expr =
-	({ ident = ident;
-	   expr  = expr; }: val_decl)
-
 let kvar ident expr =
-	({ ident = ident;
-	   expr  = expr; }: var_decl)
+	{ ident = ident;
+	  expr  = expr; }
 
 let kfun params decls body =
 	{ params = params;
@@ -99,9 +90,8 @@ let string_of_ast ast =
 		                       (string_of_expr f.body)
 		| _ -> "<Unknown literal>"
 	and string_of_decl = function
-		| ValDecl kval -> sprintf "(val \"%s\": %s = %s)" kval.ident.name (string_of_type kval.ident.type') (string_of_expr kval.expr)
-		| VarDecl kvar -> sprintf "(var \"%s\": %s = %s)" kvar.ident.name (string_of_type kvar.ident.type') (string_of_expr kvar.expr)
-		(* | _ -> "<Unknown statement>" *)
+		| VarDecl decl -> sprintf "(var \"%s\": %s = %s)" decl.ident.name (string_of_type decl.ident.type') (string_of_expr decl.expr)
+		| _ -> failwith "***"
 	and string_of_decl_list decls =
 		List.map decls ~f:string_of_decl
 		|> List.rev

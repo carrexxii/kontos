@@ -13,18 +13,18 @@ var i: int    = 5
 // var j: string = "abc"
 var k: real   = 5.3
 
-val f1 = fun args ->
+val f1 = fun ->
 	val a = 33
 	a
 
-val f2: int = fun args ->
+val f2: int = fun args: int ->
 	val a = 33
 	a
 
-fun g1 args ->
+fun g1 (args: real) ->
 	var a = 77
 	a
 
-fun g2: float args ->
+fun g2: float ->
 	var a = 77
 	a
