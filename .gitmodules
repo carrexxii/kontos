@@ -1,0 +1,3 @@
+[submodule "vm/clib"]
+	path = vm/clib
+	url = https://github.com/carrexxii/clibanarii

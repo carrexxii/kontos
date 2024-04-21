@@ -1,5 +1,8 @@
 _build/
+build/
 src/*.conflicts
 tests/*.c
 tests/a.out
 kontos
+kvm
+compile_commands.json
