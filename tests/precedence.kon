@@ -1,0 +1,5 @@
+fun main args ->
+	val x = 3
+	val y = 5
+	val z = 7
+	x + y*z

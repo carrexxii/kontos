@@ -3,24 +3,44 @@ open Core
 type ast = decl list
 
 and ident =
-	{ name : string;
-	  type': ktype; }
+	{ name   : string;
+	  type'  : ktype; }
 
 and fun_expr =
 	{ params: ident list;
 	  decls : decl list;
 	  body  : expr; }
 
+and case_expr =
+	{ expr  : expr option;
+	  guards: guard list; }
+and guard =
+	{ lhs: expr;
+	  rhs: expr; }
+
 and var_decl =
 	{ ident: ident;
 	  expr : expr; }
 
+and type_decl =
+	{ name    : string;
+	  params  : string list option;
+	  manifest: type_manifest;
+	  attr    : type_attr list }
+and type_manifest = ident list
+and type_attr =
+	{ type': ktype;
+	  expr : expr; }
+
 and decl =
-	| VarDecl of var_decl
+	| VarDecl  of var_decl
+	| TypeDecl of type_decl
 
 and expr =
 	| FunExpr    of fun_expr
+	| CaseExpr   of case_expr
 	| FunCall    of ident * expr list
+	| RecordExpr of (string * expr option) list
 	| Ident      of ident
 	| Literal    of literal
 	| UnaryCall  of ident * expr
@@ -29,8 +49,10 @@ and expr =
 and ktype =
 	| KInt
 	| KReal
-	| KString
 	| KBool
+	| KString
+	| KList
+	| KArray
 	| KUnit
 	| KFun of ktype
 	| KInfer
@@ -42,22 +64,18 @@ and literal =
 	| FltLit of float
 	| BlnLit of bool
 	| StrLit of string
+	| LstLit of expr list
+	| ArrLit of expr list
 
 (* -------------------------------------------------------------------- *)
 
-let kident name type' =
-	{ name  = name;
-	  type' = type'; }
-
-let kvar ident expr =
-	{ ident = ident;
-	  expr  = expr; }
-
-let kfun params decls body =
-	{ params = params;
-	  decls  = decls;
-	  body   = body; }
-
+let kident name type' = { name; type'; }
+let kvar ident expr = { ident; expr; }
+let ktype name params manifest attr = { name; params; manifest; attr; }
+let kattr type' expr = { type'; expr; }
+let kfun params decls body = { params; decls; body; }
+let kcase expr guards = { expr; guards; }
+let kguard lhs rhs = { lhs; rhs }
 let kinfix lhs op rhs =
 	let ident = kident op KInfer in
 	FunCall (ident, [lhs; rhs])
@@ -67,10 +85,12 @@ let kinfix lhs op rhs =
 let rec string_of_type = function
 	| KInt       -> "kint"
 	| KReal      -> "kreal"
-	| KString    -> "kstring"
 	| KBool      -> "kbool"
+	| KString    -> "kstring"
+	| KList      -> "klist"
+	| KArray     -> "karray"
 	| KUnit      -> "kunit"
-	| KFun rtype -> "kfun" ^ (string_of_type rtype)
+	| KFun rtype -> "kfun " ^ (string_of_type rtype)
 	| KInfer     -> "auto"
 	| KCustom id -> id
 

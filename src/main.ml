@@ -24,7 +24,7 @@ let compile backend fname =
 	|> string_of_ast
 	|> print_endline
 
-	;print_endline "\n- - - - - - - - ";
+	;print_endline ("\n- - - - - - - - " ^ fname);
 	let ast = Types.check ast in
 	Genc.gen (fname ^ ".c") ast
 

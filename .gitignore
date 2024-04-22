@@ -1,3 +1,4 @@
+.cache/
 _build/
 build/
 src/*.conflicts
@@ -6,3 +7,4 @@ tests/a.out
 kontos
 kvm
 compile_commands.json
+*.automaton

@@ -25,6 +25,8 @@ let gen output ast =
 		| Literal    lit                   -> write_str (string_of_literal lit)
 		| UnaryCall  (ident, expr)         -> write_str "!!"
 		| BinaryCall (lexpr, ident, rexpr) -> write_str "!!"
+		| CaseExpr    cespr                -> write_str "!!"
+		| RecordExpr  rexpr                -> write_str "!!"
 	and write_fun_call { name; type' } exprs =
 		match name with
 		| "+" | "-" | "*" | "/" ->
@@ -62,6 +64,7 @@ let gen output ast =
 			write_str ";\n"
 	and write_decl = function
 		| VarDecl kvar -> write_kvar kvar
+		| TypeDecl _ -> ()
 	and write_param_list params =
 		write_char '(';
 		List.iteri params ~f:(fun i param ->

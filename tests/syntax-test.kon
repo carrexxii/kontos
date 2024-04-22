@@ -1,33 +1,41 @@
-// Comment
-val x = 5
-val y = "abc"
-val z = 5.3
-val a: int    = 5
-val b: string = "abc"
-val c: real   = 5.3
+-- Comment
+(* Multi-line
+ * comments
+ *)
 
-var d = 5
-var e = "abc"
-var f = 5.3
-var i: int    = 5
-var j: string = "abc"
-var k: real   = 5.3
+val x = 3
+var y = "5"
+val z of real = 1.0
+var w of bool = true
+val lst of list  = [ 1; 2; 3 ]
+val arr of array = [| 3; 5; 7 |]
 
-val f1 = fun ->
-	val a = 33
-	a
+val f = fun args -> 7
+fun g x y of int ->
+	val z = x + y
+	2*z
 
-val f2: int = fun args: int ->
-	val a = 33
-	a
+(**********************************************************************)
 
-fun g1 (args: real) ->
-	var a = 77
-	a
+type Vec3 is
+	{ x of real;
+	  y of real;
+	  z of real }
+	as string =
+		"({this.x}, {this.y}, {this.z})"
 
-fun g2: float ->
-	var a = 77
-	a
+type Colour is
+	| Red
+    | Green
+	| Blue
+	as string =
+		| Red   => "Red"
+		| Green => "Green"
+		| Blue  => "Blue"
+	as Vec3 =
+		| Red   => { x = 1.0; y = 0.0; z = 0.0 }
+		| Green => { x = 0.0; y = 1.0; z = 0.0 }
+		| Blue  => { x = 0.0; y = 0.0; z = 1.0 }
 
-fun main ->
-	0
+type Option of a is Some of a | None
+type Result of a b is Ok of a | Error of b

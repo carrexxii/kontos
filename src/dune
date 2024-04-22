@@ -1,6 +1,6 @@
 (menhir
   (modules parser)
-  (flags --explain --inspection --table --dump)
+  (flags --explain --dump)
   (infer true))
 
 (ocamllex lexer)

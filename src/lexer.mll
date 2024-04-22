@@ -38,7 +38,7 @@ let float       = '-'? digit+ '.' digit+
 let binary      = '0' 'b' digit+
 let hexadecimal = '0' 'x' digit+
 
-let identifier = alpha (alnum | ['_' '-' '''])*
+let identifier = alpha (alnum | ['_' '''])*
 let whitespace = [' ' '\t']
 let newline    = '\n' | '\r' '\n'
 let escapes    = ['n']
@@ -50,7 +50,8 @@ rule read = parse
     | whitespace+     { read lexbuf }
     | newline         { new_line lexbuf;
 	                    read lexbuf }
-    | '/' '/'         { read_comment lexbuf }
+    | '-' '-'         { read_line_comment  lexbuf }
+    | '(' '*'         { read_block_comment lexbuf }
 
     | float           { FLTLIT (float_of_string (lexeme lexbuf)) }
     | integer         { INTLIT (Int64.of_string (lexeme lexbuf)) }
@@ -61,31 +62,59 @@ rule read = parse
 	| '('     { LPAREN }
 	| ')'     { RPAREN }
 	| '='     { EQUALS }
-	| '-' '>' { RARROW }
-	| ':'     { COLON  }
+	| '>'     { GT     }
+	| '<'     { LT     }
+	| '>' '=' { GTE    }
+	| '<' '=' { LTE    }
+
+	| '['     { LBRACKET }
+	| ']'     { RBRACKET }
+	| '{'     { LBRACE   }
+	| '}'     { RBRACE   }
+	| '|'     { PIPE     }
+	| '-' '>' { RARROW   }
+	| '=' '>' { DRARROW  }
+	| ','     { COMMA    }
+	| ';'     { SEMI     }
+	| ':'     { COLON    }
 	| infix   { INFIX (lexeme lexbuf) }
 
 	| "int"    { INT    }
-	| "string" { STRING }
 	| "real"   { REAL   }
 	| "bool"   { BOOL   }
+	| "string" { STRING }
+	| "list"   { LIST   }
+	| "array"  { ARRAY  }
 	| "unit"   { UNIT   }
 
-	| "val" { VAL }
-	| "var" { VAR }
-	| "fun" { FUN }
+	| "val"   { VAL   }
+	| "var"   { VAR   }
+	| "fun"   { FUN   }
+	| "type"  { TYPE  }
+	| "as"    { AS    }
+	| "case"  { CASE  }
+	| "of"    { OF    }
+	| "is"    { IS    }
+	| "true"  { TRUE  }
+	| "false" { FALSE }
 
-    | identifier      { IDENT (lexeme lexbuf) }
-    | eof             { EOF }
-	| _  { error lexbuf (sprintf "Illegal character: ` %s `" (lexeme lexbuf)) }
+    | identifier { IDENT  (lexeme lexbuf) }
+    | eof        { EOF }
+	| _  { error lexbuf (sprintf "Illegal character: `%s`" (lexeme lexbuf)) }
 and read_string = parse
 	| '"'                   { Buffer.contents string_buf }
 	| '\\' (escapes as esc) { Buffer.add_char string_buf esc;
 	                          read_string lexbuf }
 	| _ as c                { Buffer.add_char string_buf c;
 	                          read_string lexbuf }
-and read_comment = parse
+and read_line_comment = parse
     | newline { new_line lexbuf;
-	            read lexbuf }
-    | eof     { EOF                  }
-    | _       { read_comment lexbuf  }
+	            read lexbuf              }
+    | eof     { EOF                      }
+    | _       { read_line_comment lexbuf }
+and read_block_comment = parse
+	| newline { new_line lexbuf;
+	            read_block_comment lexbuf }
+    | '*' ')' { read lexbuf               }
+    | eof     { EOF                       }
+    | _       { read_block_comment lexbuf }

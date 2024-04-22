@@ -10,20 +10,22 @@ let check ast =
 		| FltLit _ -> KReal
 		| StrLit _ -> KString
 		| BlnLit _ -> KBool
+		| LstLit _ -> KList
+		| ArrLit _ -> KArray
 	and type_of_ident { name; type' } =
 		match type' with
 		| KInfer ->
 			begin match Hashtbl.find idents name with
 			| Some type' -> type'
-			| None -> Printf.printf "Error: could not infer type of \"%s\"\n" name; exit 1
+			| None -> Printf.printf "Error: could not infer type of \"%s\"\n" name; KInfer
 			end
 		| type'  -> type'
 	in
 
 	let rec type_of_function { params; decls; body } =
 		let params = List.map params ~f:(fun param ->
-			{ name  = param.name;
-			  type' = type_of_ident param})
+			{ name    = param.name;
+			  type'   = type_of_ident param; })
 		and decls = List.map decls ~f:type_of_decl
 		and body = type_of_expr body in
 		{ params; decls; body = fst body; }, snd body
@@ -47,6 +49,8 @@ let check ast =
 			let expr, type' = type_of_expr expr in
 			Hashtbl.set idents ~key:ident.name ~data:type';
 			VarDecl (kvar { ident with type' = type' } expr)
+		| TypeDecl { name; params; manifest; attr; } ->
+			TypeDecl (ktype name params manifest attr)
 	in
 
 	List.map ast ~f:type_of_decl

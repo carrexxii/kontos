@@ -4,6 +4,7 @@ VM  = kvm
 CC     = gcc
 LINKER = gcc
 
+SRC_DIR    = ./src
 VM_DIR     = ./vm
 TEST_DIR   = ./tests
 TEST_FILES = $(foreach f, $(wildcard $(TEST_DIR)/*.kon), $f)
@@ -42,7 +43,7 @@ test: all
 		./$(BIN) $f     && \
 		gcc $f.c        && \
 		./a.out || true && \
-		rm ./a.out;)
+		rm -f ./a.out;)
 
 .PHONY: restore
 restore: clean
