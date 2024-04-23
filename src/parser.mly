@@ -22,12 +22,16 @@
 
 %token <string> INFIX
 %token VAL VAR FUN TYPE AS IS CASE OF
-%token LPAREN RPAREN LBRACKET RBRACKET LBRACE RBRACE
+%token LPAREN RPAREN LBRACKET RBRACKET LBRACE RBRACE LBRACKETPIPE RBRACKETPIPE
 %token PIPE RARROW DRARROW COMMA SEMI COLON
 %token GT LT GTE LTE
+%token PLUS MINUS TIMES DIVIDE MOD POW
 %token EQUALS
-
 %token EOF
+
+%left PLUS MINUS
+%left TIMES DIVIDE MOD
+%left POW
 
 %start ast
 %type <ast> ast
@@ -46,8 +50,8 @@ type_params:
 	|           { None    }
 	| OF IDENT+ { Some $2 }
 type_manifest:
-	| PIPE? separated_list(PIPE, ident)         { $2 }
-	| LBRACE separated_list(SEMI, ident) RBRACE { $2 }
+	| PIPE? separated_list(PIPE, ident)        { kmanifest Union $2 }
+	| LBRACE flexible_list(SEMI, ident) RBRACE { kmanifest Record $2 }
 type_attr: AS ktype EQUALS expr { kattr $2 $4 }
 
 expr:
@@ -58,11 +62,20 @@ expr:
 	| literal                      { Literal $1 }
 	| FUN ident* RARROW decl* expr { FunExpr (kfun $2 $4 $5) }
 	| expr INFIX expr              { kinfix $1 $2 $3         }
+	| expr op expr                 { FunCall ($2, [$1; $3]) }
+
+%inline op:
+	| PLUS   { kident "+" KInfer }
+	| MINUS  { kident "-" KInfer }
+	| TIMES  { kident "*" KInfer }
+	| DIVIDE { kident "/" KInfer }
+	| POW    { kident "^" KInfer }
+	| MOD    { kident "%" KInfer }
 
 record_val:
 	| IDENT             { $1, None    }
 	| IDENT EQUALS expr { $1, Some $3 }
-record_expr: delimited(LBRACE, separated_list(SEMI, record_val), RBRACE) { RecordExpr $1 }
+record_expr: delimited(LBRACE, flexible_list(SEMI, record_val), RBRACE) { RecordExpr $1 }
 
 case_expr:
 	| case_guard+               { FunExpr (kfun [kident "@" KInfer] [] (CaseExpr (kcase None $1))) }
@@ -75,8 +88,8 @@ ident:
 typed_ident: IDENT OF ktype { kident $1 $3 }
 
 literal:
-	| delimited(pair(LBRACKET, PIPE), separated_list(SEMI, expr), pair(PIPE, RBRACKET)) { ArrLit $1 }
-	| delimited(LBRACKET, separated_list(SEMI, expr), RBRACKET)                         { LstLit $1 }
+	| delimited(LBRACKETPIPE, flexible_list(SEMI, expr), RBRACKETPIPE) { ArrLit $1 }
+	| delimited(LBRACKET    , flexible_list(SEMI, expr), RBRACKET    ) { LstLit $1 }
 	| UNIT   { UnitLit      }
 	| INTLIT { IntLit $1    }
 	| FLTLIT { FltLit $1    }
@@ -93,3 +106,8 @@ ktype:
 	| ARRAY  { KArray     }
 	| UNIT   { KUnit      }
 	| IDENT  { KCustom $1 }
+
+flexible_list(delim, x):
+	|                                 { []       }
+	| x                               { [$1]     }
+	| x delim flexible_list(delim, x) { $1 :: $3 }

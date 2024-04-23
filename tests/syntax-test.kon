@@ -7,8 +7,8 @@ val x = 3
 var y = "5"
 val z of real = 1.0
 var w of bool = true
-val lst of list  = [ 1; 2; 3 ]
-val arr of array = [| 3; 5; 7 |]
+val lst of list  = [ 1; 2; 3; ]
+val arr of array = [| 3; 5; 7; |]
 
 val f = fun args -> 7
 fun g x y of int ->
@@ -20,7 +20,7 @@ fun g x y of int ->
 type Vec3 is
 	{ x of real;
 	  y of real;
-	  z of real }
+	  z of real; }
 	as string =
 		"({this.x}, {this.y}, {this.z})"
 

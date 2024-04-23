@@ -66,7 +66,15 @@ rule read = parse
 	| '<'     { LT     }
 	| '>' '=' { GTE    }
 	| '<' '=' { LTE    }
+	| '+'     { PLUS   }
+	| '-'     { MINUS  }
+	| '*'     { TIMES  }
+	| '/'     { DIVIDE }
+	| '^'     { POW    }
+	| '%'     { MOD    }
 
+	| '[' '|' { LBRACKETPIPE }
+	| '|' ']' { RBRACKETPIPE }
 	| '['     { LBRACKET }
 	| ']'     { RBRACKET }
 	| '{'     { LBRACE   }

@@ -12,8 +12,8 @@ let gen output ast =
 	let write_char = Buffer.add_char   buf in
 	let write_str  = Buffer.add_string buf in
 
-	let string_of_ident { name; type' } =
-		sprintf "%s %s" (string_of_type type') name
+	let string_of_ident { name; kind } =
+		sprintf "%s %s" (string_of_type kind) name
 	in
 	let rec write_expr = function
 		| FunExpr { params; decls; body; } ->
@@ -23,11 +23,9 @@ let gen output ast =
 		| Ident ident -> write_str ident.name
 		| FunCall    (ident, exprs)        -> write_fun_call ident exprs
 		| Literal    lit                   -> write_str (string_of_literal lit)
-		| UnaryCall  (ident, expr)         -> write_str "!!"
-		| BinaryCall (lexpr, ident, rexpr) -> write_str "!!"
 		| CaseExpr    cespr                -> write_str "!!"
 		| RecordExpr  rexpr                -> write_str "!!"
-	and write_fun_call { name; type' } exprs =
+	and write_fun_call { name; kind } exprs =
 		match name with
 		| "+" | "-" | "*" | "/" ->
 			begin match exprs with

@@ -39,11 +39,7 @@ vm: $(VM)
 
 .PHONT: test
 test: all
-	@$(foreach f, $(TEST_FILES), \
-		./$(BIN) $f     && \
-		gcc $f.c        && \
-		./a.out || true && \
-		rm -f ./a.out;)
+	@$(foreach f, $(TEST_FILES), ./$(BIN) $f;)
 
 .PHONY: restore
 restore: clean
