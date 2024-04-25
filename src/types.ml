@@ -1,7 +1,7 @@
 open Core
 open Ast
 
-let check ast =
+let check (ast: ast): ast =
 	let idents = Hashtbl.create (module String) in
 
 	let type_of_literal = function
@@ -24,9 +24,9 @@ let check ast =
 
 	let rec type_of_function { params; decls; body } =
 		let params = List.map params ~f:(fun param ->
-			{ name    = param.name;
-			  kind   = type_of_ident param; })
-		and decls = List.map decls ~f:type_of_decl
+			{ name = param.name;
+			  kind = type_of_ident param; })
+		and decls = List.map decls ~f:type_of_var_decl
 		and body = type_of_expr body in
 		{ params; decls; body = fst body; }, snd body
 	and type_of_expr = function
@@ -44,6 +44,10 @@ let check ast =
 			let ident    = { ident with kind = lhs_type } in
 			FunCall (ident, List.map exprs ~f:(fun expr -> fst expr)), ident.kind
 		| x -> Printf.printf "Error: need to fetch type from identifier for expression\n"; x, KInfer
+	and type_of_var_decl decl =
+		match type_of_decl (VarDecl decl) with
+		| VarDecl d -> d
+		| _ -> failwith "Unreachable"
 	and type_of_decl = function
 		| VarDecl { ident; expr } ->
 			let expr, kind = type_of_expr expr in

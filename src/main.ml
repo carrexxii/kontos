@@ -2,14 +2,7 @@ open Core
 open Printf
 open Ast
 
-let compile backend fname =
-	let _ = match String.lowercase backend with
-			| "c" -> ()
-			| _ ->
-				eprintf "Unknown backend \"%s\" (Should be one of: c)\n" backend;
-				exit 1
-	in
-
+let compile fname =
 	let file   = In_channel.create fname in
 	let lexbuf = Lexing.from_channel file in
 	let parser = Parser.ast in
@@ -26,7 +19,8 @@ let compile backend fname =
 
 	;print_endline ("\n- - - - - - - - " ^ fname);
 	let ast = Types.check ast in
-	Genc.gen (fname ^ ".c") ast
+	Codegen.gen (fname ^ "b") ast
+	(* Genc.gen (fname ^ ".c") ast *)
 
 let () =
 	let command =
@@ -34,7 +28,6 @@ let () =
 			~summary:"Kontos compiler"
 			~readme:(fun () -> "")
 			(let%map_open.Command
-				fname   = anon ("filename" %: string)
-			and backend = flag "-b" (optional_with_default "c" string) ~doc:""
-			in fun () -> compile backend fname)
+				fname = anon ("filename" %: string)
+			in fun () -> compile fname)
 	in Command_unix.run ~version:"0.0" ~build_info:"" command

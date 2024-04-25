@@ -2,6 +2,7 @@ fun main args ->
 	val x = 3
 	val y = 5
 	val z = 7
+	val w = x + y
 	val t1 = x + y*z
 	val t2 = y*z + x
 	val t3 = 3 - 2 + 4 * 5

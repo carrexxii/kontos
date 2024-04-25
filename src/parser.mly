@@ -40,10 +40,13 @@
 ast: decl* EOF { $1 }
 
 decl:
-	| VAL ident EQUALS expr              { VarDecl (kvar $2 $4) }
-	| VAR ident EQUALS expr              { VarDecl (kvar $2 $4) }
-	| FUN ident ident* RARROW decl* expr { VarDecl (kvar $2 (FunExpr (kfun $3 $5 $6))) }
-	| type_decl                          { TypeDecl $1 }
+	| var_decl  { VarDecl  $1 }
+	| type_decl { TypeDecl $1 }
+	| fun_decl  { VarDecl  $1 }
+
+var_decl:
+	| VAL ident EQUALS expr { kvar $2 $4 }
+	| VAR ident EQUALS expr { kvar $2 $4 }
 
 type_decl: TYPE IDENT type_params IS type_manifest list(type_attr) { ktype $2 $3 $5 $6 }
 type_params:
@@ -54,15 +57,17 @@ type_manifest:
 	| LBRACE flexible_list(SEMI, ident) RBRACE { kmanifest Record $2 }
 type_attr: AS ktype EQUALS expr { kattr $2 $4 }
 
+fun_decl: FUN ident ident+ RARROW var_decl* expr { kvar $2 (FunExpr (kfun $3 $5 $6)) }
+
 expr:
-	| case_expr                    { $1 }
-	| record_expr                  { $1 }
-	| LPAREN expr RPAREN           { $2 }
-	| ident                        { Ident   $1 }
-	| literal                      { Literal $1 }
-	| FUN ident* RARROW decl* expr { FunExpr (kfun $2 $4 $5) }
-	| expr INFIX expr              { kinfix $1 $2 $3         }
-	| expr op expr                 { FunCall ($2, [$1; $3]) }
+	| case_expr                        { $1 }
+	| record_expr                      { $1 }
+	| LPAREN expr RPAREN               { $2 }
+	| ident                            { Ident   $1 }
+	| literal                          { Literal $1 }
+	| FUN ident* RARROW var_decl* expr { FunExpr (kfun $2 $4 $5) }
+	| expr INFIX expr                  { kinfix $1 $2 $3         }
+	| expr op expr                     { FunCall ($2, [$1; $3]) }
 
 %inline op:
 	| PLUS   { kident "+" KInfer }

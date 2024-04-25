@@ -3,6 +3,7 @@ _build/
 build/
 src/*.conflicts
 tests/*.c
+tests/*.konb
 tests/a.out
 kontos
 kvm

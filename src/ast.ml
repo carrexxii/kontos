@@ -1,4 +1,5 @@
 open Core
+open List
 
 type ast = decl list
 
@@ -8,7 +9,7 @@ and ident =
 
 and fun_expr =
 	{ params: ident list;
-	  decls : decl list;
+	  decls : var_decl list;
 	  body  : expr; }
 
 and case_expr =
@@ -128,7 +129,7 @@ and string_of_expr = function
 	| FunExpr f ->
 		sprintf "(fun (%s) -> %s (%s))"
 		        (string_of_ident_list f.params)
-		        (string_of_decl_list f.decls)
+		        (string_of_decl_list @@ map f.decls ~f:(fun d -> VarDecl d))
 		        (string_of_expr f.body)
 	| CaseExpr { expr; guards } ->
 		sprintf "(case %s of %s"

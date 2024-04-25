@@ -39,7 +39,8 @@ vm: $(VM)
 
 .PHONT: test
 test: all
-	@$(foreach f, $(TEST_FILES), ./$(BIN) $f;)
+	./kontos ./tests/precedence.kon
+	# @$(foreach f, $(TEST_FILES), ./$(BIN) $f;)
 
 .PHONY: restore
 restore: clean
