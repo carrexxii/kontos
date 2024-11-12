@@ -1,0 +1,6 @@
+[submodule "lib/sdl-nim"]
+	path = lib/sdl-nim
+	url = https://github.com/carrexxii/sdl-nim
+[submodule "lib/nuklear-nim"]
+	path = lib/nuklear-nim
+	url = https://github.com/carrexxii/nuklear-nim
