@@ -28,8 +28,10 @@ while running:
             load_op     : loadClear,
             store_op    : storeStore,
         )
-        ren_pass = begin_render_pass(cmd_buf, [target_info])
 
+    ui.update device, cmd_buf
+
+    let ren_pass = begin_render_pass(cmd_buf, [target_info])
     ui.draw ren_pass
     `end` ren_pass
     submit cmd_buf

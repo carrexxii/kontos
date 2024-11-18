@@ -1,38 +1,52 @@
-import sdl, sdl/gpu, nuklear, common
+import std/options, sdl, sdl/gpu, nuklear as nk, common
 
 const
-    UiVertexBufferSize = 2*1024*1024
+    VertexBufferSize = 1536*1024
+    IndexBufferSize  = 512*1024
     FontSizeSmall  = 12
     FontSizeMedium = 16
     FontSizeLarge  = 24
 
 type Vertex = object
     pos   : array[2, float32]
+    uv    : array[2, float32]
     colour: array[4, uint8]
 
+const VertexLayout = create_vertex_layout(
+    (vtxPosition, fmtFloat   , Vertex.offsetof pos),
+    (vtxTexCoord, fmtFloat   , Vertex.offsetof uv),
+    (vtxColour  , fmtR8G8B8A8, Vertex.offsetof colour),
+)
+let VertexConfig = ConvertConfig(
+    shape_aa        : aaOn,
+    line_aa         : aaOn,
+    vtx_layout      : VertexLayout[0].addr,
+    vtx_sz          : uint sizeof Vertex,
+    vtx_align       : uint alignof Vertex,
+    circle_seg_count: 22,
+    curve_seg_count : 22,
+    arc_seg_count   : 22,
+    global_alpha    : 1.0,
+    # tex_null        : null_tex,
+)
+
 var
-    context : NkContext
-    atlas   : NkFontAtlas
+    nk_ctx  : Context
+    atlas   : FontAtlas
     font_tex: Texture
 
     pipeln     : GraphicsPipeline
     vtx_shader : Shader
     frag_shader: Shader
     sampler    : Sampler
-    vtx_buf    : Buffer
-    verts_buf  : Buffer
+    vtx_buf    : gpu.Buffer
+    idx_buf    : gpu.Buffer
+    trans_buf  : TransferBuffer
+    nk_cmds    : nk.Buffer
+    nk_vtxs    : nk.Buffer
+    nk_idxs    : nk.Buffer
 
-    TriVerts = [
-        Vertex(pos: [-0.9,  0.9], colour: [0, 0, 100, 255]),
-        Vertex(pos: [ 0.9, -0.9], colour: [0, 0, 100, 255]),
-        Vertex(pos: [-0.9, -0.9], colour: [0, 0, 100, 255]),
-
-        Vertex(pos: [ 0.9,  0.9], colour: [100, 0, 0, 255]),
-        Vertex(pos: [-0.9,  0.9], colour: [100, 0, 0, 255]),
-        Vertex(pos: [ 0.9, -0.9], colour: [100, 0, 0, 255]),
-    ]
-
-proc init*(dev: Device; win: Window) =
+proc init*(dev: Device; win: sdl.Window) =
     vtx_shader  = dev.create_shader(shaderVertex, ShaderDir / "ui.vert.spv")
     frag_shader = dev.create_shader(shaderVertex, ShaderDir / "ui.frag.spv", sampler_count = 1)
     let ct_descr = ColourTargetDescription(fmt: swapchain_tex_fmt(dev, win))
@@ -48,20 +62,23 @@ proc init*(dev: Device; win: Window) =
         ),
     )
 
-    sampler  = create_sampler dev
-    vtx_buf  = create_buffer(dev, bufUsageVertex, UiVertexBufferSize)
-
-    verts_buf = dev.upload(bufUsageVertex, TriVerts)
+    sampler   = dev.create_sampler()
+    vtx_buf   = dev.create_buffer(bufUsageVertex, VertexBufferSize)
+    idx_buf   = dev.create_buffer(bufUsageIndex , IndexBufferSize)
+    trans_buf = dev.create_transfer_buffer (VertexBufferSize + IndexBufferSize)
 
     dev.set_buf_name vtx_buf , "UI Vertices"
     dev.set_tex_name font_tex, "Font Atlas"
 
     # Nuklear
-    const char_ranges = [
-        NkRune 0x0020, 0x007E,
-        0
-    ]
+    nk_cmds = create_buffer VertexBufferSize
+    nk_vtxs = create_buffer VertexBufferSize
+    nk_idxs = create_buffer IndexBufferSize
 
+    const char_ranges = [
+        Rune 0x0020, Rune 0x007E,
+        Rune 0
+    ]
     let font_file = read_file(FontDir / "IBMPlexMono.ttf")
     var font_cfg = nk_font_config FontSizeSmall
     with font_cfg:
@@ -80,27 +97,76 @@ proc init*(dev: Device; win: Window) =
     discard nk_font_atlas_add(atlas.addr, font_cfg.addr)
 
     var atlas_w, atlas_h: int32
-    let atlas_pxs = nk_font_atlas_bake(atlas.addr, atlas_w.addr, atlas_h.addr, nkFontAtlasAlpha8)
+    let atlas_pxs = nk_font_atlas_bake(atlas.addr, atlas_w.addr, atlas_h.addr, fontAtlasAlpha8)
     font_tex = dev.upload(atlas_pxs, atlas_w, atlas_h, fmt = texFmtR8Unorm)
 
     nk_font_atlas_end atlas.addr, pointer font_tex, nil
     nk_font_atlas_cleanup atlas.addr
 
-    assert nk_init(context.addr, NimAllocator.addr, font.handle.addr), "Failed to initialize Nuklear"
+    assert nk_init(nk_ctx.addr, NimAllocator.addr, font.handle.addr), "Failed to initialize Nuklear"
 
     # Cleanup
     dev.destroy vtx_shader
     dev.destroy frag_shader
 
+var test_op: int32
+proc update*(dev: Device; cmd_buf: gpu.CommandBuffer) =
+    assert nk_ctx.addr.nk_begin("Testing", nk.Rect(x: 50, y: 50, w: 220, h: 220), (winBorder or winMovable or winClosable))
+    nk_ctx.addr.nk_layout_row_static 30, 80, 1
+    if nk_ctx.addr.nk_button_label "button":
+        echo "~~~Event"
+
+    nk_ctx.addr.nk_layout_row_dynamic 30, 2
+    if nk_ctx.addr.nk_option_label("easy", test_op == 1): test_op = 1
+    if nk_ctx.addr.nk_option_label("hard", test_op == 2): test_op = 2
+
+    with nk_ctx.addr:
+        nk_layout_row_begin layoutStatic, 30, 2
+        nk_layout_row_push 50
+        nk_label "Volume: ", cast[TextAlignment](0x11)
+        nk_layout_row_push 110
+    let f = nk_ctx.slider(0.0, 1.0, 0.1)
+    nk_layout_row_end nk_ctx.addr
+
+    nk_ctx.convert VertexConfig, nk_cmds, nk_vtxs, nk_idxs
+
+    var buf_dst = dev.map trans_buf
+    copy_mem buf_dst, nk_vtxs.mem.mem, nk_vtxs.sz
+    buf_dst = cast[pointer](cast[uint](buf_dst) + nk_vtxs.sz)
+    copy_mem buf_dst, nk_idxs.mem.mem, nk_idxs.sz
+    dev.unmap trans_buf
+
+    nk_end nk_ctx.addr
+    nk_clear nk_ctx.addr
+
+    let copy_pass = begin_copy_pass cmd_buf
+    copy_pass.upload trans_buf, vtx_buf, nk_vtxs.sz, cycle = true
+    copy_pass.upload trans_buf, idx_buf, nk_idxs.sz, cycle = true, trans_buf_offset = nk_vtxs.sz
+    `end`copy_pass
+
 proc draw*(ren_pass: RenderPass) =
     with ren_pass:
         `bind` pipeln
         `bind` 0, [TextureSamplerBinding(tex: font_tex, sampler: sampler)]
-        `bind` 0, [BufferBinding(buf: verts_buf)]
-        draw 6
+        `bind` 0, [BufferBinding(buf: vtx_buf)]
+        `bind` BufferBinding(buf: idx_buf), elemSz16
+
+    var offset = 0'u32
+    for cmd in nk_ctx.commands nk_cmds:
+        # ren_pass.`bind` 0, [TextureSamplerBinding(tex: font_tex, sampler: sampler)]
+        let r = cmd.clip_rect
+        ren_pass.scissor = some sdl.Rect(x: max(cint r.x, 0), y: max(cint r.y, 0),
+                                         w: max(cint r.w, 0), h: max(cint r.h, 0))
+        ren_pass.draw_indexed cmd.elem_count, fst_idx = offset
+        offset += cmd.elem_count
+    nk_buffer_clear nk_cmds.addr
 
 proc free*(dev: Device) =
     nk_font_atlas_clear atlas.addr
+    destroy nk_cmds
+    destroy nk_vtxs
+    destroy nk_idxs
+
     dev.destroy font_tex
     dev.destroy sampler
     dev.destroy pipeln
