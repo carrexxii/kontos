@@ -16,6 +16,10 @@ const
          dst  : lib_dir / "nuklear-nim",
          tag  : "",
          cmds : @[&"nim restore --skipParentCfg"]),
+        (src  : "https://github.com/carrexxii/ngm",
+         dst  : lib_dir / "ngm",
+         tag  : "",
+         cmds : @[&"nim restore --skipParentCfg"]),
     ]
 
 var cmd_count = 0

@@ -7,6 +7,7 @@ device.claim window
 
 ui.init device, window
 
+echo " === Starting Main Loop === "
 var running = true
 while running:
     for event in events():
@@ -32,7 +33,7 @@ while running:
     ui.update device, cmd_buf
 
     let ren_pass = begin_render_pass(cmd_buf, [target_info])
-    ui.draw ren_pass
+    ui.draw ren_pass, cmd_buf
     `end` ren_pass
     submit cmd_buf
 

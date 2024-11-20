@@ -1,4 +1,7 @@
-import std/options, sdl, sdl/gpu, nuklear as nk, common
+import
+    std/options,
+    sdl, sdl/gpu, nuklear as nk, ngm,
+    common
 
 const
     VertexBufferSize = 1536*1024
@@ -45,16 +48,20 @@ var
     nk_cmds    : nk.Buffer
     nk_vtxs    : nk.Buffer
     nk_idxs    : nk.Buffer
+    proj       : Mat4
 
 proc init*(dev: Device; win: sdl.Window) =
-    vtx_shader  = dev.create_shader(shaderVertex, ShaderDir / "ui.vert.spv")
+    proj = orthogonal(0, 1280, 800, 0, 0.1, 1.0)
+
+    vtx_shader  = dev.create_shader(shaderVertex, ShaderDir / "ui.vert.spv", uniform_buf_count = 1)
     frag_shader = dev.create_shader(shaderVertex, ShaderDir / "ui.frag.spv", sampler_count = 1)
     let ct_descr = ColourTargetDescription(fmt: swapchain_tex_fmt(dev, win))
     pipeln = dev.create_graphics_pipeline(vtx_shader, frag_shader,
         vertex_input_state(
             [vtx_descr(0, sizeof Vertex, inputVertex)],
-            [vtx_attr(0, 0, vtxElemFloat2, 0),
-             vtx_attr(1, 0, vtxElemUByte4, 8)],
+            [vtx_attr(0, 0, vtxElemFloat2, Vertex.offsetof pos),
+             vtx_attr(1, 0, vtxElemFloat2, Vertex.offsetof uv),
+             vtx_attr(2, 0, vtxElemUByte4, Vertex.offsetof colour)],
         ),
         target_info = GraphicsPipelineTargetInfo(
             colour_target_descrs: ct_descr.addr,
@@ -144,7 +151,8 @@ proc update*(dev: Device; cmd_buf: gpu.CommandBuffer) =
     copy_pass.upload trans_buf, idx_buf, nk_idxs.sz, cycle = true, trans_buf_offset = nk_vtxs.sz
     `end`copy_pass
 
-proc draw*(ren_pass: RenderPass) =
+proc draw*(ren_pass: RenderPass; cmd_buf: gpu.CommandBuffer) =
+    cmd_buf.push_vtx_uniform 0, proj
     with ren_pass:
         `bind` pipeln
         `bind` 0, [TextureSamplerBinding(tex: font_tex, sampler: sampler)]
@@ -153,7 +161,7 @@ proc draw*(ren_pass: RenderPass) =
 
     var offset = 0'u32
     for cmd in nk_ctx.commands nk_cmds:
-        # ren_pass.`bind` 0, [TextureSamplerBinding(tex: font_tex, sampler: sampler)]
+        ren_pass.`bind` 0, [TextureSamplerBinding(tex: font_tex, sampler: sampler)]
         let r = cmd.clip_rect
         ren_pass.scissor = some sdl.Rect(x: max(cint r.x, 0), y: max(cint r.y, 0),
                                          w: max(cint r.w, 0), h: max(cint r.h, 0))

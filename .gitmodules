@@ -4,3 +4,6 @@
 [submodule "lib/nuklear-nim"]
 	path = lib/nuklear-nim
 	url = https://github.com/carrexxii/nuklear-nim
+[submodule "lib/ngm"]
+	path = lib/ngm
+	url = https://github.com/carrexxii/ngm
