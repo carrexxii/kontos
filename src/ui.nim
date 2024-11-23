@@ -4,8 +4,9 @@ import
     common
 
 const
-    VertexBufferSize = 1536*1024
-    IndexBufferSize  = 512*1024
+    CommandBufferSize = 128*1024
+    VertexBufferSize  = 1536*1024
+    IndexBufferSize   = 512*1024
     FontSizeSmall  = 12
     FontSizeMedium = 16
     FontSizeLarge  = 24
@@ -53,9 +54,22 @@ var
 proc init*(dev: Device; win: sdl.Window) =
     proj = orthogonal(0, 1280, 800, 0, 0.1, 1.0)
 
-    vtx_shader  = dev.create_shader(shaderVertex, ShaderDir / "ui.vert.spv", uniform_buf_count = 1)
-    frag_shader = dev.create_shader(shaderVertex, ShaderDir / "ui.frag.spv", sampler_count = 1)
-    let ct_descr = ColourTargetDescription(fmt: swapchain_tex_fmt(dev, win))
+    vtx_shader  = dev.create_shader_from_file(shaderVertex, ShaderDir / "ui.vert.spv", uniform_buf_count = 1)
+    frag_shader = dev.create_shader_from_file(shaderVertex, ShaderDir / "ui.frag.spv", sampler_count = 1)
+    let ct_descr = ColourTargetDescription(
+        fmt        : swapchain_tex_fmt(dev, win),
+        blend_state: ColourTargetBlendState(
+            src_colour_blend_factor : blendFacSrcAlpha,
+            src_alpha_blend_factor  : blendFacSrcAlpha,
+            dst_colour_blend_factor : blendFacOneMinusAlpha,
+            dst_alpha_blend_factor  : blendFacOneMinusAlpha,
+            colour_blend_op         : blendAdd,
+            alpha_blend_op          : blendAdd,
+            colour_write_mask       : colourCompNone,
+            enable_blend            : true,
+            enable_colour_write_mask: false,
+        ),
+    )
     pipeln = dev.create_graphics_pipeline(vtx_shader, frag_shader,
         vertex_input_state(
             [vtx_descr(0, sizeof Vertex, inputVertex)],
@@ -78,7 +92,7 @@ proc init*(dev: Device; win: sdl.Window) =
     dev.set_tex_name font_tex, "Font Atlas"
 
     # Nuklear
-    nk_cmds = create_buffer VertexBufferSize
+    nk_cmds = create_buffer CommandBufferSize
     nk_vtxs = create_buffer VertexBufferSize
     nk_idxs = create_buffer IndexBufferSize
 
@@ -161,13 +175,16 @@ proc draw*(ren_pass: RenderPass; cmd_buf: gpu.CommandBuffer) =
 
     var offset = 0'u32
     for cmd in nk_ctx.commands nk_cmds:
-        ren_pass.`bind` 0, [TextureSamplerBinding(tex: font_tex, sampler: sampler)]
+        if cmd.tex:
+            ren_pass.`bind` 0, [TextureSamplerBinding(tex: cmd.tex, sampler: sampler)]
         let r = cmd.clip_rect
         ren_pass.scissor = some sdl.Rect(x: max(cint r.x, 0), y: max(cint r.y, 0),
                                          w: max(cint r.w, 0), h: max(cint r.h, 0))
         ren_pass.draw_indexed cmd.elem_count, fst_idx = offset
         offset += cmd.elem_count
     nk_buffer_clear nk_cmds.addr
+    nk_buffer_clear nk_vtxs.addr
+    nk_buffer_clear nk_idxs.addr
 
 proc free*(dev: Device) =
     nk_font_atlas_clear atlas.addr

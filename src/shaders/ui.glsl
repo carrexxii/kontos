@@ -15,7 +15,7 @@ layout(set = 1, binding = 0) uniform Camera {
 
 void main()
 {
-    out_colour  = in_colour;
+    out_colour  = vec4(in_colour) / 255;
     out_uv      = in_uv;
     gl_Position = camera.proj * vec4(in_pos, 0, 1);
 }
@@ -33,8 +33,7 @@ layout(set = 2, binding = 0) uniform sampler2D atlas;
 
 void main()
 {
-    out_colour = in_colour / 255;;
-    // out_colour = vec4(texture(atlas, in_colour.xy).r);
+    out_colour = in_colour * texture(atlas, in_uv).rrra;
 }
 
 #endif ////////////////////////////////////////////////////

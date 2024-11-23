@@ -1,7 +1,7 @@
-import std/with
+import std/with, compat
 from std/os        import `/`
 from std/strformat import `&`
-export with, `/`, `&`
+export compat, with, `/`, `&`
 
 const
     FontDir*   = "res/fonts"
