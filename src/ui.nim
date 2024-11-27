@@ -35,10 +35,10 @@ let VertexConfig = ConvertConfig(
 )
 
 var
-    nk_ctx  : Context
-    atlas   : FontAtlas
-    font_tex: Texture
+    nk_context*: Context
 
+    atlas      : FontAtlas
+    font_tex   : Texture
     pipeln     : GraphicsPipeline
     vtx_shader : Shader
     frag_shader: Shader
@@ -124,32 +124,34 @@ proc init*(dev: Device; win: sdl.Window) =
     nk_font_atlas_end atlas.addr, pointer font_tex, nil
     nk_font_atlas_cleanup atlas.addr
 
-    assert nk_init(nk_ctx.addr, NimAllocator.addr, font.handle.addr), "Failed to initialize Nuklear"
+    assert nk_init(nk_context.addr, NimAllocator.addr, font.handle.addr), "Failed to initialize Nuklear"
 
     # Cleanup
     dev.destroy vtx_shader
     dev.destroy frag_shader
 
 var test_op: int32
+var test_slider: float32
 proc update*(dev: Device; cmd_buf: gpu.CommandBuffer) =
-    assert nk_ctx.addr.nk_begin("Testing", nk.Rect(x: 50, y: 50, w: 220, h: 220), (winBorder or winMovable or winClosable))
-    nk_ctx.addr.nk_layout_row_static 30, 80, 1
-    if nk_ctx.addr.nk_button_label "button":
+    assert nk_context.addr.nk_begin("Testing", nk.Rect(x: 50, y: 50, w: 220, h: 220), (winBorder or winMovable or winClosable))
+    nk_context.addr.nk_layout_row_static 30, 80, 1
+    if nk_context.addr.nk_button_label "button":
         echo "~~~Event"
 
-    nk_ctx.addr.nk_layout_row_dynamic 30, 2
-    if nk_ctx.addr.nk_option_label("easy", test_op == 1): test_op = 1
-    if nk_ctx.addr.nk_option_label("hard", test_op == 2): test_op = 2
+    nk_context.addr.nk_layout_row_dynamic 30, 2
+    if nk_context.addr.nk_option_label("easy", test_op == 1): test_op = 1
+    if nk_context.addr.nk_option_label("hard", test_op == 2): test_op = 2
 
-    with nk_ctx.addr:
+    with nk_context.addr:
         nk_layout_row_begin layoutStatic, 30, 2
         nk_layout_row_push 50
         nk_label "Volume: ", cast[TextAlignment](0x11)
         nk_layout_row_push 110
-    let f = nk_ctx.slider(0.0, 1.0, 0.1)
-    nk_layout_row_end nk_ctx.addr
+    # let f = nk_context.slider(0.0, 1.0, 0.1)
+    discard nk_slider_float(nk_context.addr, 0.0, test_slider.addr, 1.0, 0.1)
+    nk_layout_row_end nk_context.addr
 
-    nk_ctx.convert VertexConfig, nk_cmds, nk_vtxs, nk_idxs
+    nk_context.convert VertexConfig, nk_cmds, nk_vtxs, nk_idxs
 
     var buf_dst = dev.map trans_buf
     copy_mem buf_dst, nk_vtxs.mem.mem, nk_vtxs.sz
@@ -157,8 +159,8 @@ proc update*(dev: Device; cmd_buf: gpu.CommandBuffer) =
     copy_mem buf_dst, nk_idxs.mem.mem, nk_idxs.sz
     dev.unmap trans_buf
 
-    nk_end nk_ctx.addr
-    nk_clear nk_ctx.addr
+    nk_end nk_context.addr
+    nk_clear nk_context.addr
 
     let copy_pass = begin_copy_pass cmd_buf
     copy_pass.upload trans_buf, vtx_buf, nk_vtxs.sz, cycle = true
@@ -174,7 +176,7 @@ proc draw*(ren_pass: RenderPass; cmd_buf: gpu.CommandBuffer) =
         `bind` BufferBinding(buf: idx_buf), elemSz16
 
     var offset = 0'u32
-    for cmd in nk_ctx.commands nk_cmds:
+    for cmd in nk_context.commands nk_cmds:
         if cmd.tex:
             ren_pass.`bind` 0, [TextureSamplerBinding(tex: cmd.tex, sampler: sampler)]
         let r = cmd.clip_rect
