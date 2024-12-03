@@ -10,7 +10,7 @@ ui.init device, window
 echo " === Starting Main Loop === "
 var running = true
 while running:
-    nk_input_begin nk_context.addr
+    begin_input nk_context
     for event in events():
         case event.kind
         of eventQuit:
@@ -18,26 +18,26 @@ while running:
         of eventKeyDown, eventKeyUp:
             case event.kb.key
             of kcEscape: running = false
-            of kcDelete   : nk_context.addr.nk_input_key keyDel      , event.kb.down
-            of kcReturn   : nk_context.addr.nk_input_key keyEnter    , event.kb.down
-            of kcTab      : nk_context.addr.nk_input_key keyTab      , event.kb.down
-            of kcBackspace: nk_context.addr.nk_input_key keyBackspace, event.kb.down
-            of kcLeft     : nk_context.addr.nk_input_key keyLeft     , event.kb.down
-            of kcRight    : nk_context.addr.nk_input_key keyRight    , event.kb.down
-            of kcUp       : nk_context.addr.nk_input_key keyUp       , event.kb.down
-            of kcDown     : nk_context.addr.nk_input_key keyDown     , event.kb.down
+            of kcDelete   : nk_context.input_key kkDel      , event.kb.down
+            of kcReturn   : nk_context.input_key kkEnter    , event.kb.down
+            of kcTab      : nk_context.input_key kkTab      , event.kb.down
+            of kcBackspace: nk_context.input_key kkBackspace, event.kb.down
+            of kcLeft     : nk_context.input_key kkLeft     , event.kb.down
+            of kcRight    : nk_context.input_key kkRight    , event.kb.down
+            of kcUp       : nk_context.input_key kkUp       , event.kb.down
+            of kcDown     : nk_context.input_key kkDown     , event.kb.down
             else: discard
         of eventMouseButtonDown, eventMouseButtonUp:
             case event.btn.btn
-            of mbLeft  : nk_context.addr.nk_input_button btnLeft  , cint event.btn.x, cint event.btn.y, event.btn.down
-            of mbMiddle: nk_context.addr.nk_input_button btnMiddle, cint event.btn.x, cint event.btn.y, event.btn.down
-            of mbRight : nk_context.addr.nk_input_button btnRight , cint event.btn.x, cint event.btn.y, event.btn.down
+            of mbLeft  : nk_context.input_button bLeft  , event.btn.x, event.btn.y, event.btn.down
+            of mbMiddle: nk_context.input_button bMiddle, event.btn.x, event.btn.y, event.btn.down
+            of mbRight : nk_context.input_button bRight , event.btn.x, event.btn.y, event.btn.down
             else:
                 discard
         of eventMouseMotion:
-            nk_context.addr.nk_input_motion cint event.motion.x, cint event.motion.y
+            nk_context.input_motion event.motion.x, event.motion.y
         else: discard
-    nk_input_end nk_context.addr
+    end_input nk_context
 
     let
         cmd_buf = acquire_cmd_buf device

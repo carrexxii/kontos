@@ -17,9 +17,9 @@ type Vertex = object
     colour: array[4, uint8]
 
 const VertexLayout = create_vertex_layout(
-    (vtxPosition, fmtFloat   , Vertex.offsetof pos),
-    (vtxTexCoord, fmtFloat   , Vertex.offsetof uv),
-    (vtxColour  , fmtR8G8B8A8, Vertex.offsetof colour),
+    (dvlaPosition, dvlfFloat   , Vertex.offsetof pos),
+    (dvlaTexCoord, dvlfFloat   , Vertex.offsetof uv),
+    (dvlaColour  , dvlfR8G8B8A8, Vertex.offsetof colour),
 )
 let VertexConfig = ConvertConfig(
     shape_aa        : aaOn,
@@ -101,7 +101,7 @@ proc init*(dev: Device; win: sdl.Window) =
         Rune 0
     ]
     let font_file = read_file(FontDir / "IBMPlexMono.ttf")
-    var font_cfg = nk_font_config FontSizeSmall
+    var font_cfg = nk_font_config FontSizeMedium
     with font_cfg:
         ttf_blob = font_file[0].addr
         ttf_sz   = uint font_file.len
@@ -109,22 +109,15 @@ proc init*(dev: Device; win: sdl.Window) =
         # oversample_v = 1
         range = char_ranges[0].addr
 
-    nk_font_atlas_init atlas.addr, NimAllocator.addr
-    nk_font_atlas_begin atlas.addr
-    let font = nk_font_atlas_add(atlas.addr, font_cfg.addr)
-    font_cfg.sz = FontSizeMedium
-    discard nk_font_atlas_add(atlas.addr, font_cfg.addr)
-    font_cfg.sz = FontSizeLarge
-    discard nk_font_atlas_add(atlas.addr, font_cfg.addr)
-
-    var atlas_w, atlas_h: int32
-    let atlas_pxs = nk_font_atlas_bake(atlas.addr, atlas_w.addr, atlas_h.addr, fontAtlasAlpha8)
+    atlas = create_atlas()
+    begin atlas
+    let font = atlas.add font_cfg
+    let (atlas_pxs, atlas_w, atlas_h) = bake atlas
     font_tex = dev.upload(atlas_pxs, atlas_w, atlas_h, fmt = texFmtR8Unorm)
+    `end` atlas, pointer font_tex
+    cleanup atlas
 
-    nk_font_atlas_end atlas.addr, pointer font_tex, nil
-    nk_font_atlas_cleanup atlas.addr
-
-    assert nk_init(nk_context.addr, NimAllocator.addr, font.handle.addr), "Failed to initialize Nuklear"
+    init nk_context, font
 
     # Cleanup
     dev.destroy vtx_shader
@@ -133,23 +126,20 @@ proc init*(dev: Device; win: sdl.Window) =
 var test_op: int32
 var test_slider: float32
 proc update*(dev: Device; cmd_buf: gpu.CommandBuffer) =
-    assert nk_context.addr.nk_begin("Testing", nk.Rect(x: 50, y: 50, w: 220, h: 220), (winBorder or winMovable or winClosable))
-    nk_context.addr.nk_layout_row_static 30, 80, 1
+    begin nk_context, nk.Rect(x: 40, y: 40, w: 320, h: 320), winBorder or winMovable or winClosable, name = "Testing"
+    nk_context.row 1, 30, 80
     if nk_context.addr.nk_button_label "button":
-        echo "~~~Event"
+        echo &"~~~Event (slider = {test_slider})"
 
-    nk_context.addr.nk_layout_row_dynamic 30, 2
-    if nk_context.addr.nk_option_label("easy", test_op == 1): test_op = 1
-    if nk_context.addr.nk_option_label("hard", test_op == 2): test_op = 2
+    nk_context.row 2, 30
+    if nk_context.option("easy", test_op == 1): test_op = 1
+    if nk_context.option("hard", test_op == 2): test_op = 2
 
-    with nk_context.addr:
-        nk_layout_row_begin layoutStatic, 30, 2
-        nk_layout_row_push 50
-        nk_label "Volume: ", cast[TextAlignment](0x11)
-        nk_layout_row_push 110
-    # let f = nk_context.slider(0.0, 1.0, 0.1)
-    discard nk_slider_float(nk_context.addr, 0.0, test_slider.addr, 1.0, 0.1)
-    nk_layout_row_end nk_context.addr
+    nk_context.row_custom 2, 30:
+        push 50
+        label "Volume: "
+        push 110
+        slider test_slider.addr, 0.0, 1.0, 0.1
 
     nk_context.convert VertexConfig, nk_cmds, nk_vtxs, nk_idxs
 
@@ -159,14 +149,16 @@ proc update*(dev: Device; cmd_buf: gpu.CommandBuffer) =
     copy_mem buf_dst, nk_idxs.mem.mem, nk_idxs.sz
     dev.unmap trans_buf
 
-    nk_end nk_context.addr
-    nk_clear nk_context.addr
+    `end` nk_context
+    clear nk_context
 
     let copy_pass = begin_copy_pass cmd_buf
-    copy_pass.upload trans_buf, vtx_buf, nk_vtxs.sz, cycle = true
-    copy_pass.upload trans_buf, idx_buf, nk_idxs.sz, cycle = true, trans_buf_offset = nk_vtxs.sz
-    `end`copy_pass
+    with copy_pass:
+        upload trans_buf, vtx_buf, nk_vtxs.sz, cycle = true
+        upload trans_buf, idx_buf, nk_idxs.sz, cycle = true, trans_buf_offset = nk_vtxs.sz
+        `end`
 
+from std/sequtils import apply
 proc draw*(ren_pass: RenderPass; cmd_buf: gpu.CommandBuffer) =
     cmd_buf.push_vtx_uniform 0, proj
     with ren_pass:
@@ -184,16 +176,12 @@ proc draw*(ren_pass: RenderPass; cmd_buf: gpu.CommandBuffer) =
                                          w: max(cint r.w, 0), h: max(cint r.h, 0))
         ren_pass.draw_indexed cmd.elem_count, fst_idx = offset
         offset += cmd.elem_count
-    nk_buffer_clear nk_cmds.addr
-    nk_buffer_clear nk_vtxs.addr
-    nk_buffer_clear nk_idxs.addr
+    clear nk_cmds, nk_vtxs, nk_idxs
 
 proc free*(dev: Device) =
-    nk_font_atlas_clear atlas.addr
-    destroy nk_cmds
-    destroy nk_vtxs
-    destroy nk_idxs
-
-    dev.destroy font_tex
-    dev.destroy sampler
-    dev.destroy pipeln
+    clear atlas
+    destroy nk_cmds, nk_vtxs, nk_idxs
+    with dev:
+        destroy font_tex
+        destroy sampler
+        destroy pipeln
