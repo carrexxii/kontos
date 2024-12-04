@@ -7,3 +7,6 @@
 [submodule "lib/ngm"]
 	path = lib/ngm
 	url = https://github.com/carrexxii/ngm
+[submodule "lib/nai"]
+	path = lib/nai
+	url = https://github.com/carrexxii/nai

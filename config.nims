@@ -8,18 +8,23 @@ const
     shader_out = res_dir / "shaders"
     entry = src_dir / "main.nim"
     deps: seq[tuple[src, dst, tag: string; cmds: seq[string]]] = @[
-        (src  : "https://github.com/carrexxii/sdl-nim",
-         dst  : lib_dir / "sdl-nim",
-         tag  : "",
-         cmds : @[&"nim restore --skipParentCfg"]),
-        (src  : "https://github.com/carrexxii/nuklear-nim",
-         dst  : lib_dir / "nuklear-nim",
-         tag  : "",
-         cmds : @[&"nim restore --skipParentCfg"]),
-        (src  : "https://github.com/carrexxii/ngm",
-         dst  : lib_dir / "ngm",
-         tag  : "",
-         cmds : @[&"nim restore --skipParentCfg"]),
+        (src : "https://github.com/carrexxii/sdl-nim",
+         dst : lib_dir / "sdl-nim",
+         tag : "",
+         cmds: @["nim restore --skipParentCfg"]),
+        (src : "https://github.com/carrexxii/nuklear-nim",
+         dst : lib_dir / "nuklear-nim",
+         tag : "",
+         cmds: @["nim restore --skipParentCfg"]),
+        (src : "https://github.com/carrexxii/ngm",
+         dst : lib_dir / "ngm",
+         tag : "",
+         cmds: @["nim restore --skipParentCfg"]),
+        (src : "https://github.com/carrexxii/nai",
+         dst : lib_dir / "nai",
+         tag : "",
+         cmds: @["nim restore --skipParentCfg",
+                 "cp src/nai.nim ../"]),
     ]
 
 var cmd_count = 0
