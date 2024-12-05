@@ -16,46 +16,45 @@ type Vertex = object
     uv    : array[2, float32]
     colour: array[4, uint8]
 
-const VertexLayout = create_vertex_layout(
-    (dvlaPosition, dvlfFloat   , Vertex.offsetof pos),
-    (dvlaTexCoord, dvlfFloat   , Vertex.offsetof uv),
-    (dvlaColour  , dvlfR8G8B8A8, Vertex.offsetof colour),
-)
-let VertexConfig = ConvertConfig(
-    shape_aa        : aaOn,
-    line_aa         : aaOn,
-    vtx_layout      : VertexLayout[0].addr,
-    vtx_sz          : uint sizeof Vertex,
-    vtx_align       : uint alignof Vertex,
-    circle_seg_count: 22,
-    curve_seg_count : 22,
-    arc_seg_count   : 22,
-    global_alpha    : 1.0,
-    # tex_null        : null_tex,
-)
+let 
+    VertexLayout = create_vertex_layout(
+        (dvlaPosition, dvlfFloat   , Vertex.offsetof pos),
+        (dvlaTexCoord, dvlfFloat   , Vertex.offsetof uv),
+        (dvlaColour  , dvlfR8G8B8A8, Vertex.offsetof colour),
+    )
+    VertexConfig = ConvertConfig(
+        shape_aa        : aaOn,
+        line_aa         : aaOn,
+        vtx_layout      : VertexLayout[0].addr,
+        vtx_sz          : uint sizeof Vertex,
+        vtx_align       : uint alignof Vertex,
+        circle_seg_count: 22,
+        curve_seg_count : 22,
+        arc_seg_count   : 22,
+        global_alpha    : 1.0,
+        # tex_null        : null_tex,
+    )
 
 var
-    nk_context*: Context
+    ui_ctx*: Context
 
-    atlas      : FontAtlas
-    font_tex   : Texture
-    pipeln     : GraphicsPipeline
-    vtx_shader : Shader
-    frag_shader: Shader
-    sampler    : Sampler
-    vtx_buf    : gpu.Buffer
-    idx_buf    : gpu.Buffer
-    trans_buf  : TransferBuffer
-    nk_cmds    : nk.Buffer
-    nk_vtxs    : nk.Buffer
-    nk_idxs    : nk.Buffer
-    proj       : Mat4
+    atlas    : FontAtlas
+    font_tex : Texture
+    pipeln   : GraphicsPipeline
+    sampler  : Sampler
+    sdl_trans: TransferBuffer
+    sdl_vtxs : gpu.Buffer
+    sdl_idxs : gpu.Buffer
+    nk_cmds  : nk.Buffer
+    nk_vtxs  : nk.Buffer
+    nk_idxs  : nk.Buffer
+    proj     : Mat4x4
 
 proc init*(dev: Device; win: sdl.Window) =
     proj = orthogonal(0, 1280, 800, 0, 0.1, 1.0)
 
-    vtx_shader  = dev.create_shader_from_file(shaderVertex, ShaderDir / "ui.vert.spv", uniform_buf_count = 1)
-    frag_shader = dev.create_shader_from_file(shaderVertex, ShaderDir / "ui.frag.spv", sampler_count = 1)
+    let vtx_shader  = dev.create_shader_from_file(shaderVertex, ShaderDir / "ui.vert.spv", uniform_buf_count = 1)
+    let frag_shader = dev.create_shader_from_file(shaderVertex, ShaderDir / "ui.frag.spv", sampler_count = 1)
     let ct_descr = ColourTargetDescription(
         fmt        : swapchain_tex_fmt(dev, win),
         blend_state: ColourTargetBlendState(
@@ -84,12 +83,11 @@ proc init*(dev: Device; win: sdl.Window) =
     )
 
     sampler   = dev.create_sampler()
-    vtx_buf   = dev.create_buffer(bufUsageVertex, VertexBufferSize)
-    idx_buf   = dev.create_buffer(bufUsageIndex , IndexBufferSize)
-    trans_buf = dev.create_transfer_buffer (VertexBufferSize + IndexBufferSize)
+    sdl_trans = dev.create_transfer_buffer (VertexBufferSize + IndexBufferSize)
+    sdl_vtxs  = dev.create_buffer(bufUsageVertex, VertexBufferSize, "UI Vertices")
+    sdl_idxs  = dev.create_buffer(bufUsageIndex , IndexBufferSize , "UI Indices")
 
-    dev.set_buf_name vtx_buf , "UI Vertices"
-    dev.set_tex_name font_tex, "Font Atlas"
+    dev.set_tex_name font_tex, "UI Font Atlas"
 
     # Nuklear
     nk_cmds = create_buffer CommandBufferSize
@@ -109,66 +107,67 @@ proc init*(dev: Device; win: sdl.Window) =
         # oversample_v = 1
         range = char_ranges[0].addr
 
-    atlas = create_atlas()
+    init atlas
     begin atlas
     let font = atlas.add font_cfg
     let (atlas_pxs, atlas_w, atlas_h) = bake atlas
     font_tex = dev.upload(atlas_pxs, atlas_w, atlas_h, fmt = texFmtR8Unorm)
     `end` atlas, pointer font_tex
-    cleanup atlas
+    `=destroy` atlas
 
-    init nk_context, font
+    init ui_ctx, font
 
     # Cleanup
     dev.destroy vtx_shader
     dev.destroy frag_shader
 
+    debug "Initialized UI"
+
 var test_op: int32
 var test_slider: float32
 proc update*(dev: Device; cmd_buf: gpu.CommandBuffer) =
-    begin nk_context, nk.Rect(x: 40, y: 40, w: 320, h: 320), winBorder or winMovable or winClosable, name = "Testing"
-    nk_context.row 1, 30, 80
-    if nk_context.addr.nk_button_label "button":
+    begin ui_ctx, nk.Rect(x: 40, y: 40, w: 320, h: 320), winBorder or winMovable or winClosable, name = "Testing"
+    ui_ctx.row 1, 30, 80
+    if ui_ctx.addr.nk_button_label "button":
         echo &"~~~Event (slider = {test_slider})"
 
-    nk_context.row 2, 30
-    if nk_context.option("easy", test_op == 1): test_op = 1
-    if nk_context.option("hard", test_op == 2): test_op = 2
+    ui_ctx.row 2, 30
+    if ui_ctx.option("easy", test_op == 1): test_op = 1
+    if ui_ctx.option("hard", test_op == 2): test_op = 2
 
-    nk_context.row_custom 2, 30:
+    ui_ctx.row_custom 2, 30:
         push 50
         label "Volume: "
         push 110
         slider test_slider.addr, 0.0, 1.0, 0.1
 
-    nk_context.convert VertexConfig, nk_cmds, nk_vtxs, nk_idxs
+    ui_ctx.convert VertexConfig, nk_cmds, nk_vtxs, nk_idxs
 
-    var buf_dst = dev.map trans_buf
+    var buf_dst = dev.map sdl_trans
     copy_mem buf_dst, nk_vtxs.mem.mem, nk_vtxs.sz
     buf_dst = cast[pointer](cast[uint](buf_dst) + nk_vtxs.sz)
     copy_mem buf_dst, nk_idxs.mem.mem, nk_idxs.sz
-    dev.unmap trans_buf
+    dev.unmap sdl_trans
 
-    `end` nk_context
-    clear nk_context
+    `end` ui_ctx
+    clear ui_ctx
 
     let copy_pass = begin_copy_pass cmd_buf
     with copy_pass:
-        upload trans_buf, vtx_buf, nk_vtxs.sz, cycle = true
-        upload trans_buf, idx_buf, nk_idxs.sz, cycle = true, trans_buf_offset = nk_vtxs.sz
+        upload sdl_trans, sdl_vtxs, nk_vtxs.sz, cycle = true
+        upload sdl_trans, sdl_idxs, nk_idxs.sz, cycle = true, trans_buf_offset = nk_vtxs.sz
         `end`
 
-from std/sequtils import apply
 proc draw*(ren_pass: RenderPass; cmd_buf: gpu.CommandBuffer) =
     cmd_buf.push_vtx_uniform 0, proj
     with ren_pass:
         `bind` pipeln
         `bind` 0, [TextureSamplerBinding(tex: font_tex, sampler: sampler)]
-        `bind` 0, [BufferBinding(buf: vtx_buf)]
-        `bind` BufferBinding(buf: idx_buf), elemSz16
+        `bind` 0, [BufferBinding(buf: sdl_vtxs)]
+        `bind` BufferBinding(buf: sdl_idxs), elemSz16
 
     var offset = 0'u32
-    for cmd in nk_context.commands nk_cmds:
+    for cmd in ui_ctx.commands nk_cmds:
         if cmd.tex:
             ren_pass.`bind` 0, [TextureSamplerBinding(tex: cmd.tex, sampler: sampler)]
         let r = cmd.clip_rect
@@ -179,9 +178,11 @@ proc draw*(ren_pass: RenderPass; cmd_buf: gpu.CommandBuffer) =
     clear nk_cmds, nk_vtxs, nk_idxs
 
 proc free*(dev: Device) =
-    clear atlas
-    destroy nk_cmds, nk_vtxs, nk_idxs
+    debug "Freeing UI resources"
     with dev:
+        destroy sdl_trans
+        destroy sdl_vtxs
+        destroy sdl_idxs
         destroy font_tex
         destroy sampler
         destroy pipeln

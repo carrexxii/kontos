@@ -1,4 +1,7 @@
 cache/
-kontos
+tests/models
 
 *.spv
+
+kontos
+log.txt

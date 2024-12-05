@@ -1,4 +1,6 @@
-import sdl, sdl/gpu, nuklear as nk, ui
+import
+    sdl, sdl/gpu, nuklear as nk,
+    common, ui
 
 sdl.init (initVideo or initEvents)
 let device = create_device(shaderFmtSpirV, true)
@@ -7,37 +9,39 @@ device.claim window
 
 ui.init device, window
 
-echo " === Starting Main Loop === "
+info " === Starting Main Loop === "
 var running = true
 while running:
-    begin_input nk_context
+    begin_input ui_ctx
     for event in events():
         case event.kind
         of eventQuit:
+            info "Quitting..."
             running = false
         of eventKeyDown, eventKeyUp:
             case event.kb.key
             of kcEscape: running = false
-            of kcDelete   : nk_context.input_key kkDel      , event.kb.down
-            of kcReturn   : nk_context.input_key kkEnter    , event.kb.down
-            of kcTab      : nk_context.input_key kkTab      , event.kb.down
-            of kcBackspace: nk_context.input_key kkBackspace, event.kb.down
-            of kcLeft     : nk_context.input_key kkLeft     , event.kb.down
-            of kcRight    : nk_context.input_key kkRight    , event.kb.down
-            of kcUp       : nk_context.input_key kkUp       , event.kb.down
-            of kcDown     : nk_context.input_key kkDown     , event.kb.down
+            of kcDelete   : ui_ctx.input_key kkDel      , event.kb.down
+            of kcReturn   : ui_ctx.input_key kkEnter    , event.kb.down
+            of kcTab      : ui_ctx.input_key kkTab      , event.kb.down
+            of kcBackspace: ui_ctx.input_key kkBackspace, event.kb.down
+            of kcLeft     : ui_ctx.input_key kkLeft     , event.kb.down
+            of kcRight    : ui_ctx.input_key kkRight    , event.kb.down
+            of kcUp       : ui_ctx.input_key kkUp       , event.kb.down
+            of kcDown     : ui_ctx.input_key kkDown     , event.kb.down
             else: discard
         of eventMouseButtonDown, eventMouseButtonUp:
             case event.btn.btn
-            of mbLeft  : nk_context.input_button bLeft  , event.btn.x, event.btn.y, event.btn.down
-            of mbMiddle: nk_context.input_button bMiddle, event.btn.x, event.btn.y, event.btn.down
-            of mbRight : nk_context.input_button bRight , event.btn.x, event.btn.y, event.btn.down
+            of mbLeft  : ui_ctx.input_button bLeft  , event.btn.x, event.btn.y, event.btn.down
+            of mbMiddle: ui_ctx.input_button bMiddle, event.btn.x, event.btn.y, event.btn.down
+            of mbRight : ui_ctx.input_button bRight , event.btn.x, event.btn.y, event.btn.down
             else:
                 discard
         of eventMouseMotion:
-            nk_context.input_motion event.motion.x, event.motion.y
-        else: discard
-    end_input nk_context
+            ui_ctx.input_motion event.motion.x, event.motion.y
+        else:
+            discard
+    end_input ui_ctx
 
     let
         cmd_buf = acquire_cmd_buf device
@@ -59,3 +63,4 @@ while running:
 ui.free device
 destroy device
 sdl.quit()
+debug " === Shutdown Complete === "
