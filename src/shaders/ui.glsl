@@ -33,7 +33,7 @@ layout(set = 2, binding = 0) uniform sampler2D atlas;
 
 void main()
 {
-    out_colour = in_colour * texture(atlas, in_uv).rrra;
+    out_colour = in_colour * texture(atlas, in_uv).aaaa;
 }
 
 #endif ////////////////////////////////////////////////////

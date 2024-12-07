@@ -1,10 +1,13 @@
 import
     sdl, sdl/gpu, nuklear as nk,
-    common, ui
+    common, ui, project
+
+var window_w = 1280
+var window_h = 800
 
 sdl.init (initVideo or initEvents)
 let device = create_device(shaderFmtSpirV, true)
-let window = create_window("GPU Test", 1280, 800, winNone)
+let window = create_window("GPU Test", window_w, window_h, winNone)
 device.claim window
 
 ui.init device, window
@@ -53,7 +56,7 @@ while running:
             store_op    : storeStore,
         )
 
-    ui.update device, cmd_buf
+    ui.update device, cmd_buf, window_w, window_h
 
     let ren_pass = begin_render_pass(cmd_buf, [target_info])
     ui.draw ren_pass, cmd_buf

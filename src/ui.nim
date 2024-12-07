@@ -1,15 +1,15 @@
 import
     std/options,
     sdl, sdl/gpu, nuklear as nk, ngm,
-    common
+    common, project
 
 const
     CommandBufferSize = 128*1024
     VertexBufferSize  = 1536*1024
     IndexBufferSize   = 512*1024
-    FontSizeSmall  = 12
-    FontSizeMedium = 16
-    FontSizeLarge  = 24
+    FontSizeSmall  = 16
+    FontSizeMedium = 24
+    FontSizeLarge  = 32
 
 type Vertex = object
     pos   : array[2, float32]
@@ -56,13 +56,13 @@ proc init*(dev: Device; win: sdl.Window) =
     let vtx_shader  = dev.create_shader_from_file(shaderVertex, ShaderDir / "ui.vert.spv", uniform_buf_count = 1)
     let frag_shader = dev.create_shader_from_file(shaderVertex, ShaderDir / "ui.frag.spv", sampler_count = 1)
     let ct_descr = ColourTargetDescription(
-        fmt        : swapchain_tex_fmt(dev, win),
+        fmt: dev.swapchain_tex_fmt win,
         blend_state: ColourTargetBlendState(
             src_colour_blend_factor : blendFacSrcAlpha,
-            src_alpha_blend_factor  : blendFacSrcAlpha,
             dst_colour_blend_factor : blendFacOneMinusAlpha,
-            dst_alpha_blend_factor  : blendFacOneMinusAlpha,
             colour_blend_op         : blendAdd,
+            src_alpha_blend_factor  : blendFacSrcAlpha,
+            dst_alpha_blend_factor  : blendFacOneMinusAlpha,
             alpha_blend_op          : blendAdd,
             colour_write_mask       : colourCompNone,
             enable_blend            : true,
@@ -77,8 +77,10 @@ proc init*(dev: Device; win: sdl.Window) =
              vtx_attr(2, 0, vtxElemUByte4, Vertex.offsetof colour)],
         ),
         target_info = GraphicsPipelineTargetInfo(
-            colour_target_descrs: ct_descr.addr,
-            colour_target_count : 1,
+            colour_target_descrs    : ct_descr.addr,
+            colour_target_count     : 1,
+            depth_stencil_fmt       : texFmtInvalid,
+            has_depth_stencil_target: false,
         ),
     )
 
@@ -98,20 +100,20 @@ proc init*(dev: Device; win: sdl.Window) =
         Rune 0x0020, Rune 0x007E,
         Rune 0
     ]
-    let font_file = read_file(FontDir / "IBMPlexMono.ttf")
-    var font_cfg = nk_font_config FontSizeMedium
+    let font_file = read_file(FontDir / "PixeloidSans-Bold.ttf")
+    var font_cfg = nk_font_config FontSizeSmall
     with font_cfg:
-        ttf_blob = font_file[0].addr
-        ttf_sz   = uint font_file.len
-        # oversample_h = 1
-        # oversample_v = 1
-        range = char_ranges[0].addr
+        ttf_blob     = font_file[0].addr
+        ttf_sz       = uint font_file.len
+        oversample_h = 1
+        oversample_v = 1
+        range        = char_ranges[0].addr
 
     init atlas
     begin atlas
     let font = atlas.add font_cfg
     let (atlas_pxs, atlas_w, atlas_h) = bake atlas
-    font_tex = dev.upload(atlas_pxs, atlas_w, atlas_h, fmt = texFmtR8Unorm)
+    font_tex = dev.upload(atlas_pxs, atlas_w, atlas_h, fmt = texFmtA8Unorm)
     `end` atlas, pointer font_tex
     `=destroy` atlas
 
@@ -123,24 +125,21 @@ proc init*(dev: Device; win: sdl.Window) =
 
     debug "Initialized UI"
 
-var test_op: int32
-var test_slider: float32
-proc update*(dev: Device; cmd_buf: gpu.CommandBuffer) =
-    begin ui_ctx, nk.Rect(x: 40, y: 40, w: 320, h: 320), winBorder or winMovable or winClosable, name = "Testing"
-    ui_ctx.row 1, 30, 80
-    if ui_ctx.addr.nk_button_label "button":
-        echo &"~~~Event (slider = {test_slider})"
+proc update*(dev: Device; cmd_buf: gpu.CommandBuffer; w: SomeNumber; h: SomeNumber) =
+    let sb_w = 0.3 * cfloat w
+    ui_ctx.begin nk.Rect(x: (cfloat w) - sb_w, y: 0, w: sb_w, h: cfloat h), winBorder
+    ui_ctx.min_row_height = 100
 
-    ui_ctx.row 2, 30
-    if ui_ctx.option("easy", test_op == 1): test_op = 1
-    if ui_ctx.option("hard", test_op == 2): test_op = 2
+    ui_ctx.hr sb_w
 
-    ui_ctx.row_custom 2, 30:
-        push 50
-        label "Volume: "
-        push 110
-        slider test_slider.addr, 0.0, 1.0, 0.1
-
+    ui_ctx.row 2, 30, 125
+    if ui_ctx.button "Save Project":
+        if not project.save():
+            discard
+    if ui_ctx.button "Load Project":
+        if not project.load "tests/Test Project.ktsproj":
+            discard
+    
     ui_ctx.convert VertexConfig, nk_cmds, nk_vtxs, nk_idxs
 
     var buf_dst = dev.map sdl_trans
