@@ -42,6 +42,9 @@ while running:
                 discard
         of eventMouseMotion:
             ui_ctx.input_motion event.motion.x, event.motion.y
+        of eventTextInput:
+            for c in event.text.text:
+                ui_ctx.input_char c
         else:
             discard
     end_input ui_ctx
@@ -56,7 +59,7 @@ while running:
             store_op    : storeStore,
         )
 
-    ui.update device, cmd_buf, window_w, window_h
+    ui.update device, cmd_buf, window, window_w, window_h
 
     let ren_pass = begin_render_pass(cmd_buf, [target_info])
     ui.draw ren_pass, cmd_buf

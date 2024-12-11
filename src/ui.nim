@@ -1,7 +1,7 @@
 import
-    std/options,
+    std/[options, os],
     sdl, sdl/gpu, nuklear as nk, ngm,
-    common, project
+    common, project, resmgr
 
 const
     CommandBufferSize = 128*1024
@@ -38,17 +38,18 @@ let
 var
     ui_ctx*: Context
 
-    atlas    : FontAtlas
-    font_tex : Texture
-    pipeln   : GraphicsPipeline
-    sampler  : Sampler
-    sdl_trans: TransferBuffer
-    sdl_vtxs : gpu.Buffer
-    sdl_idxs : gpu.Buffer
-    nk_cmds  : nk.Buffer
-    nk_vtxs  : nk.Buffer
-    nk_idxs  : nk.Buffer
-    proj     : Mat4x4
+    atlas     : FontAtlas
+    font_tex  : Texture
+    small_font: ptr Font
+    pipeln    : GraphicsPipeline
+    sampler   : Sampler
+    sdl_trans : TransferBuffer
+    sdl_vtxs  : gpu.Buffer
+    sdl_idxs  : gpu.Buffer
+    nk_cmds   : nk.Buffer
+    nk_vtxs   : nk.Buffer
+    nk_idxs   : nk.Buffer
+    proj      : Mat4x4
 
 proc init*(dev: Device; win: sdl.Window) =
     proj = orthogonal(0, 1280, 800, 0, 0.1, 1.0)
@@ -111,13 +112,13 @@ proc init*(dev: Device; win: sdl.Window) =
 
     init atlas
     begin atlas
-    let font = atlas.add font_cfg
+    small_font = atlas.add font_cfg
     let (atlas_pxs, atlas_w, atlas_h) = bake atlas
     font_tex = dev.upload(atlas_pxs, atlas_w, atlas_h, fmt = texFmtA8Unorm)
     `end` atlas, pointer font_tex
     `=destroy` atlas
 
-    init ui_ctx, font
+    init ui_ctx, small_font
 
     # Cleanup
     dev.destroy vtx_shader
@@ -125,20 +126,41 @@ proc init*(dev: Device; win: sdl.Window) =
 
     debug "Initialized UI"
 
-proc update*(dev: Device; cmd_buf: gpu.CommandBuffer; w: SomeNumber; h: SomeNumber) =
+proc add_objects(paths: seq[string]) =
+    let ppath = project.get_path()
+    let root  = (split_file ppath)[0]
+    for path in paths:
+        let (dir, name, ext) = split_file path
+        case ext
+        of ".nai":
+            load_model path
+        else:
+            if file_exists ppath:
+                let output = root / "res/models" / &"{name}.nai"
+                convert output, path
+            else:
+                let src = path
+                save_file_dialog (proc(dst: string) = convert dst, src), default_loc = ppath
+
+proc update*(dev: Device; cmd_buf: gpu.CommandBuffer; win: sdl.Window; w: SomeNumber; h: SomeNumber) =
     let sb_w = 0.3 * cfloat w
     ui_ctx.begin nk.Rect(x: (cfloat w) - sb_w, y: 0, w: sb_w, h: cfloat h), winBorder
     ui_ctx.min_row_height = 100
 
-    ui_ctx.hr sb_w
-
-    ui_ctx.row 2, 30, 125
-    if ui_ctx.button "Save Project":
-        if not project.save():
-            discard
-    if ui_ctx.button "Load Project":
-        if not project.load "tests/Test Project.ktsproj":
-            discard
+    ui_ctx.menubar 35, (40, 30):
+        "File":
+            "Add":
+                open_file_dialog add_objects, default_loc = project.get_path()
+            "Quit":
+                quit 0
+        "Project":
+            "Load":
+                open_file_dialog project.load, default_loc = project.get_path()
+            "Save":
+                if not project.save():
+                    error "Error saving" # TODO
+            "Save As":
+                save_file_dialog project.save_as, default_loc = project.get_path()
     
     ui_ctx.convert VertexConfig, nk_cmds, nk_vtxs, nk_idxs
 
