@@ -2,6 +2,7 @@ cache/
 tests/res
 
 *.spv
+lib/*.nim
 
 kontos
 log.txt

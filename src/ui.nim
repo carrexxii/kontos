@@ -133,7 +133,8 @@ proc add_objects(paths: seq[string]) =
         let (dir, name, ext) = split_file path
         case ext
         of ".nai":
-            load_model path
+            discard
+            # load_model path
         else:
             if file_exists ppath:
                 let output = root / "res/models" / &"{name}.nai"

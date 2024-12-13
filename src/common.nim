@@ -6,6 +6,7 @@ export compat, with, `/`, `&`
 const
     FontDir*   = "res/fonts"
     ShaderDir* = "res/shaders"
+    ModelDir*  = "res/models"
 
 #[ -------------------------------------------------------------------- ]#
 
