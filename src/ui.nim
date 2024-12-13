@@ -54,8 +54,8 @@ var
 proc init*(dev: Device; win: sdl.Window) =
     proj = orthogonal(0, 1280, 800, 0, 0.1, 1.0)
 
-    let vtx_shader  = dev.create_shader_from_file(shaderVertex, ShaderDir / "ui.vert.spv", uniform_buf_count = 1)
-    let frag_shader = dev.create_shader_from_file(shaderVertex, ShaderDir / "ui.frag.spv", sampler_count = 1)
+    let vtx_shader  = dev.create_shader_from_file(shaderVertex  , ShaderDir / "ui.vert.spv", uniform_buf_count = 1)
+    let frag_shader = dev.create_shader_from_file(shaderFragment, ShaderDir / "ui.frag.spv", sampler_count = 1)
     let ct_descr = ColourTargetDescription(
         fmt: dev.swapchain_tex_fmt win,
         blend_state: ColourTargetBlendState(
@@ -197,6 +197,7 @@ proc draw*(ren_pass: RenderPass; cmd_buf: gpu.CommandBuffer) =
                                          w: max(cint r.w, 0), h: max(cint r.h, 0))
         ren_pass.draw_indexed cmd.elem_count, fst_idx = offset
         offset += cmd.elem_count
+    ren_pass.scissor = none sdl.Rect
     clear nk_cmds, nk_vtxs, nk_idxs
 
 proc free*(dev: Device) =

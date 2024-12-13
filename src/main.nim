@@ -1,6 +1,6 @@
 import
     sdl, sdl/gpu, nuklear as nk,
-    common, ui, project, resmgr
+    common, ui, project, resmgr, models
 
 var window_w = 1280
 var window_h = 800
@@ -11,6 +11,7 @@ let window = create_window("GPU Test", window_w, window_h, winNone)
 device.claim window
 
 ui.init device, window
+models.init device, window
 
 project.set_path "tests/Test Project.ktsproj"
 let mdl = device.load_model "tests/res/models/fish.nai"
@@ -65,12 +66,14 @@ while running:
     ui.update device, cmd_buf, window, window_w, window_h
 
     let ren_pass = begin_render_pass(cmd_buf, [target_info])
+    ren_pass.draw mdl
     ui.draw ren_pass, cmd_buf
     `end` ren_pass
     submit cmd_buf
 
 resmgr.cleanup device
+models.cleanup device
 ui.free device
 destroy device
 sdl.quit()
-debug " === Shutdown Complete === "
+info " === Shutdown Complete === "

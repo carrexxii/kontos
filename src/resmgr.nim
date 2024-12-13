@@ -1,7 +1,7 @@
 import
     std/[os, osproc, streams, tables],
     sdl, sdl/gpu, nai,
-    common, model
+    common, models
 from std/strutils import strip
 
 const NaiPath = "lib/nai/nai"
@@ -13,7 +13,7 @@ type
         case kind: ResourceKind
         of rkModel: mdl: ref Model
 
-var models = init_table[string, ref Model]()
+var mdls = init_table[string, ref Model]()
 
 proc convert*(dst, src: string) =
     let dst = dst.add_file_ext ".nai"
@@ -27,6 +27,7 @@ proc convert*(dst, src: string) =
         info &"Converted file '{src}' to Nai file ({dst})"
 
 proc load_model*(dev: Device; path: string): ref Model =
+    result = new Model
     let file  = open_file_stream path
     let fname = (split_file path)[1]
 
@@ -42,6 +43,9 @@ proc load_model*(dev: Device; path: string): ref Model =
     var mesh_header: MeshHeader
     for i in 0'u16..<header.mesh_cnt:
         file.read mesh_header
+        result.meshes[i].vtx_cnt = mesh_header.idx_cnt
+        result.meshes[i].fst_idx = uint32 idxs.len
+        result.meshes[i].mtl_idx = mesh_header.mtl_idx
 
         let vtx_sz = (int mesh_header.vtx_cnt) * sizeof Vertex
         vtxs.set_len_uninit (vtxs.len + int mesh_header.vtx_cnt)
@@ -53,17 +57,16 @@ proc load_model*(dev: Device; path: string): ref Model =
         if file.read_data(idxs[idxs.len - int mesh_header.idx_cnt].addr, idx_sz) != idx_sz:
             error &"Failed reading index data from model file '{path}'"
 
-    result = new Model
     let vtxs_sz = vtxs.len * sizeof Vertex
-    let idxs_sz = idxs.len * is32Bit # FIXME
+    let idxs_sz = idxs.len * is32Bit
     let trans_buf = dev.create_transfer_buffer (vtxs_sz + idxs_sz)
     result.vbo = dev.create_buffer(bufUsageVertex, vtxs_sz, &"{fname} Vertices ({path})")
     result.ibo = dev.create_buffer(bufUsageIndex , idxs_sz, &"{fname} Indices ({path})")
 
     let vtxs_dst = dev.map trans_buf
     copy_mem vtxs_dst, vtxs[0].addr, vtxs_sz
-    let idx_dst = cast[pointer](cast[int](vtxs_dst) + vtxs_sz)
-    copy_mem idx_dst, idxs[0].addr, idxs_sz
+    let idxs_dst = cast[pointer](cast[int](vtxs_dst) + vtxs_sz)
+    copy_mem idxs_dst, idxs[0].addr, idxs_sz
     dev.unmap trans_buf
 
     let cmd_buf   = acquire_cmd_buf dev
@@ -72,12 +75,15 @@ proc load_model*(dev: Device; path: string): ref Model =
         upload trans_buf, result.vbo, vtxs_sz
         upload trans_buf, result.ibo, idxs_sz, trans_buf_offset = vtxs_sz
         `end`
+    submit cmd_buf
 
     dev.destroy trans_buf
     close file
-    models[path] = result
+    mdls[path] = result
+
+    debug &"Loaded model '{path}' with {vtxs.len} vertices/{idxs.len} indices"
 
 proc cleanup*(dev: Device) =
-    for mdl in models.values:
+    for mdl in mdls.values:
         dev.destroy mdl.vbo
         dev.destroy mdl.ibo
