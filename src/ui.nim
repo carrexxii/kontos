@@ -80,8 +80,18 @@ proc init*(dev: Device; win: sdl.Window) =
         target_info = GraphicsPipelineTargetInfo(
             colour_target_descrs    : ct_descr.addr,
             colour_target_count     : 1,
-            depth_stencil_fmt       : texFmtInvalid,
-            has_depth_stencil_target: false,
+            depth_stencil_fmt       : texFmtD16Unorm,
+            has_depth_stencil_target: true,
+        ),
+        depth_stencil_state = DepthStencilState(
+            compare_op         : cmpGreaterOrEqual,
+            back_stencil_state : StencilOpState(),
+            front_stencil_state: StencilOpState(),
+            compare_mask       : 0x00,
+            write_mask         : 0xFF,
+            enable_depth_test  : true,
+            enable_depth_write : true,
+            enable_stencil_test: false,
         ),
     )
 

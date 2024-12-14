@@ -1,4 +1,5 @@
 import
+    std/options,
     sdl, sdl/gpu, nuklear as nk,
     common, ui, project, resmgr, models
 
@@ -9,6 +10,9 @@ sdl.init (initVideo or initEvents)
 let device = create_device(shaderFmtSpirV, true)
 let window = create_window("GPU Test", window_w, window_h, winNone)
 device.claim window
+
+let depth_tex = device.create_texture(window_w, window_h, fmt = texFmtD16Unorm, usage = texUsageDepthStencilTarget)
+device.set_tex_name depth_tex, "Depth Texture"
 
 ui.init device, window
 models.init device, window
@@ -62,10 +66,20 @@ while running:
             load_op     : loadClear,
             store_op    : storeStore,
         )
+        depth_info = DepthStencilTargetInfo(
+            tex             : depth_tex,
+            clear_depth     : 0.0,
+            load_op         : loadClear,
+            store_op        : storeStore,
+            stencil_load_op : loadClear,
+            stencil_store_op: storeDontCare,
+            cycle           : true,
+            clear_stencil   : 0,
+        )
 
     ui.update device, cmd_buf, window, window_w, window_h
 
-    let ren_pass = begin_render_pass(cmd_buf, [target_info])
+    let ren_pass = begin_render_pass(cmd_buf, [target_info], some depth_info)
     ren_pass.draw mdl
     ui.draw ren_pass, cmd_buf
     `end` ren_pass
@@ -74,6 +88,7 @@ while running:
 resmgr.cleanup device
 models.cleanup device
 ui.free device
+device.destroy depth_tex
 destroy device
 sdl.quit()
 info " === Shutdown Complete === "

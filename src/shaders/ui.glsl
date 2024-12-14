@@ -17,7 +17,7 @@ void main()
 {
     out_colour  = vec4(in_colour) / 255;
     out_uv      = in_uv;
-    gl_Position = camera.proj * vec4(in_pos, 0, 1);
+    gl_Position = camera.proj * vec4(in_pos, -1, 1);
 }
 
 #endif
