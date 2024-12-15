@@ -7,8 +7,8 @@ const
 type
     Vertex* = object
         pos*   : Vec3
-        uv*    : Vec2
         normal*: Vec3
+        uv*    : Vec2
 
     Model* = object
         vbo*   : Buffer
@@ -25,11 +25,12 @@ type
         diffuse*    : Texture
         base_colour*: Vec4
 
-var pipeln: GraphicsPipeline
+var pipeln : GraphicsPipeline
+var sampler: Sampler
 
 proc init*(dev: Device; win: Window) =
-    let vtx_shader  = dev.create_shader_from_file(shaderVertex  , ShaderDir / "model.vert.spv")
-    let frag_shader = dev.create_shader_from_file(shaderFragment, ShaderDir / "model.frag.spv")
+    let vtx_shader  = dev.create_shader_from_file(shaderVertex  , ShaderDir / "model.vert.spv", uniform_buf_count = 1)
+    let frag_shader = dev.create_shader_from_file(shaderFragment, ShaderDir / "model.frag.spv", sampler_count = 1)
     let ct_descr = ColourTargetDescription(
         fmt: dev.swapchain_tex_fmt win,
         blend_state: ColourTargetBlendState(
@@ -69,6 +70,8 @@ proc init*(dev: Device; win: Window) =
         ),
     )
 
+    sampler = dev.create_sampler()
+
     dev.destroy vtx_shader
     dev.destroy frag_shader
 
@@ -81,7 +84,11 @@ proc draw*(ren_pass: RenderPass; mdl: ref Model) =
         if mesh.vtx_cnt == 0:
             break
 
+        let diffuse = mdl.mtls[mesh.mtl_idx].diffuse
+        ren_pass.`bind` 0, [TextureSamplerBinding(tex: diffuse, sampler: sampler)]
         ren_pass.draw_indexed mesh.vtx_cnt, fst_idx = mesh.fst_idx
 
 proc cleanup*(dev: Device) =
-    dev.destroy pipeln
+    with dev:
+        destroy sampler
+        destroy pipeln

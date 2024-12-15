@@ -10,7 +10,7 @@ layout(location = 0) out vec4 out_colour;
 layout(location = 1) out vec2 out_uv;
 
 layout(set = 1, binding = 0) uniform Camera {
-	mat4 proj;
+    mat4 proj;
 } camera;
 
 void main()
