@@ -1,7 +1,10 @@
 import
     std/options,
     sdl, sdl/gpu, nuklear as nk, ngm,
-    common, ui, project, resmgr, models
+    common, ui, project, resmgr, models, input
+
+proc shutdown(_: bool) =
+    quit 0
 
 var window_w = 1280
 var window_h = 800
@@ -30,53 +33,19 @@ var camera = Camera3D(
     proj     : perspective_default (window_w / window_h),
 )
 
+kcEscape.map shutdown
+kcW.map proc(was_down: bool) = camera.move cdUp
+kcA.map proc(was_down: bool) = camera.move cdLeft
+kcS.map proc(was_down: bool) = camera.move cdDown
+kcD.map proc(was_down: bool) = camera.move cdRight
+kcQ.map proc(was_down: bool) = camera.move cdForwards
+kcE.map proc(was_down: bool) = camera.move cdBackwards
+
 info " === Starting Main Loop === "
 var running = true
 while running:
-    begin_input ui_ctx
-    for event in events():
-        case event.kind
-        of eventQuit:
-            info "Quitting..."
-            running = false
-        of eventKeyDown, eventKeyUp:
-            case event.kb.key
-            of kcEscape: running = false
-            of kcDelete   : ui_ctx.input_key kkDel      , event.kb.down
-            of kcReturn   : ui_ctx.input_key kkEnter    , event.kb.down
-            of kcTab      : ui_ctx.input_key kkTab      , event.kb.down
-            of kcBackspace: ui_ctx.input_key kkBackspace, event.kb.down
-            of kcLeft     : ui_ctx.input_key kkLeft     , event.kb.down
-            of kcRight    : ui_ctx.input_key kkRight    , event.kb.down
-            of kcUp       : ui_ctx.input_key kkUp       , event.kb.down
-            of kcDown     : ui_ctx.input_key kkDown     , event.kb.down
-
-            of kcW: camera.move cdUp   
-            of kcA: camera.move cdLeft 
-            of kcS: camera.move cdDown 
-            of kcD: camera.move cdRight
-            of kcQ: camera.move cdForwards
-            of kcE: camera.move cdBackwards
-            else:
-                discard
-        of eventMouseButtonDown, eventMouseButtonUp:
-            case event.btn.btn
-            of mbLeft  : ui_ctx.input_button bLeft  , event.btn.x, event.btn.y, event.btn.down
-            of mbMiddle: ui_ctx.input_button bMiddle, event.btn.x, event.btn.y, event.btn.down
-            of mbRight : ui_ctx.input_button bRight , event.btn.x, event.btn.y, event.btn.down
-            else:
-                discard
-        of eventMouseMotion:
-            ui_ctx.input_motion event.motion.x, event.motion.y
-        of eventTextInput:
-            for c in event.text.text:
-                ui_ctx.input_char c
-        else:
-            discard
-    end_input ui_ctx
-
+    input.update()
     update camera
-
     let
         cmd_buf = acquire_cmd_buf device
         screen  = cmd_buf.swapchain_tex window
