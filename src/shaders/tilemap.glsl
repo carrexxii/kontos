@@ -2,12 +2,7 @@
 
 #ifdef VERTEX /////////////////////////////////////////////
 
-layout(location = 0) in vec3 in_pos;
-layout(location = 1) in vec2 in_uv;
-layout(location = 2) in vec3 in_normal;
-
 layout(location = 0) out vec2 out_uv;
-layout(location = 1) out vec3 out_normal;
 
 layout(set = 1, binding = 0) uniform Camera {
 	mat4 proj;
@@ -16,10 +11,8 @@ layout(set = 1, binding = 0) uniform Camera {
 
 void main()
 {
-    out_uv     = in_uv;
-    out_normal = in_normal;
-
-    vec4 pos = vec4(in_pos.x, -in_pos.z, -in_pos.y, 1);
+    out_uv = vec2(0, 0);
+    vec4 pos = vec4(0, 0, 0, 1);
     gl_Position = camera.proj * camera.view * pos;
 }
 
@@ -28,17 +21,12 @@ void main()
 #ifdef FRAGMENT
 
 layout(location = 0) in vec2 in_uv;
-layout(location = 1) in vec3 in_normal;
 
 layout(location = 0) out vec4 out_colour;
 
-layout(set = 2, binding = 0) uniform sampler2D diffuse;
-
 void main()
 {
-    out_colour = texture(diffuse, in_uv);
-    // out_colour = vec4(in_uv, 1, 1);
-    // out_colour = vec4(in_normal, 1);
+    out_colour = vec4(in_uv, 1, 1);
 }
 
 #endif ////////////////////////////////////////////////////

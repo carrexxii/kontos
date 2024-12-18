@@ -1,7 +1,8 @@
 import
     std/options,
-    sdl, sdl/gpu, nuklear as nk, ngm,
-    common, ui, project, resmgr, models, input
+    sdl, sdl/gpu, ngm,
+    common, ui, project, resmgr, models, input, tilemap
+import nuklear except Vec2
 
 proc shutdown(_: bool) =
     quit 0
@@ -23,23 +24,30 @@ models.init device, window
 project.set_path "tests/Test Project.ktsproj"
 let mdl = device.load_model "tests/res/models/fish.nai"
 
-var camera = Camera3D(
-    proj_kind: cpPerspective,
-    pan_speed: 0.1,
-    rot_speed: 0.1,
-    pos      : vec3(1, 1, 1),
-    target   : vec3(0, 0, 0),
-    up       : vec3(0, 1, 0),
-    proj     : perspective_default (window_w / window_h),
-)
+tilemap.init device, window
+let map = tilemap.create(64, 32)
+
+var camera = Camera3D(proj: perspective_default (window_w / window_h))
 
 kcEscape.map shutdown
-kcW.map proc(was_down: bool) = camera.move cdUp
+kcQ.map proc(was_down: bool) = camera.move cdUp
+kcE.map proc(was_down: bool) = camera.move cdDown
+kcW.map proc(was_down: bool) = camera.move cdForwards
 kcA.map proc(was_down: bool) = camera.move cdLeft
-kcS.map proc(was_down: bool) = camera.move cdDown
+kcS.map proc(was_down: bool) = camera.move cdBackwards
 kcD.map proc(was_down: bool) = camera.move cdRight
-kcQ.map proc(was_down: bool) = camera.move cdForwards
-kcE.map proc(was_down: bool) = camera.move cdBackwards
+
+kcBackspace.map proc(was_down: bool) =
+    camera.pos = vec3( 1,  1,  0)
+    camera.dir = vec3(-1, -1,  0)
+    camera.up  = vec3( 0,  0, -1)
+map_motion proc(pos, delta: Vec2) =
+    if modifiers[imRmb]:
+        camera.roll -delta.x*0.005'rad
+        camera.move cdForwards
+    else:
+        camera.yaw   -delta.x*0.005'rad
+        camera.pitch -delta.y*0.005'rad
 
 info " === Starting Main Loop === "
 var running = true
@@ -70,10 +78,11 @@ while running:
 
     let ren_pass = begin_render_pass(cmd_buf, [target_info], some depth_info)
     cmd_buf.push_vtx_uniform 0, [camera.proj, camera.view]
-
-    ren_pass.draw mdl
-    ui.draw ren_pass, cmd_buf
-    `end` ren_pass
+    with ren_pass:
+        draw mdl
+        draw map
+        ui.draw cmd_buf
+        `end`
     submit cmd_buf
 
 resmgr.cleanup device

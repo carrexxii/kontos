@@ -1,36 +1,19 @@
-import sdl, sdl/gpu, ngm, common
-
-const
-    MaxMeshCount     = 8
-    MaxMaterialCount = 8
+import common, sdl, sdl/gpu
+from std/sequtils import new_seq_with
 
 type
-    Vertex* = object
-        pos*   : Vec3
-        normal*: Vec3
-        uv*    : Vec2
+    Tilemap* = object
+        w, h : uint32
+        tiles: seq[seq[Tile]]
 
-    Model* = object
-        vbo*   : Buffer
-        ibo*   : Buffer
-        meshes*: array[MaxMeshCount    , Mesh]
-        mtls*  : array[MaxMaterialCount, Material]
-
-    Mesh* = object
-        vtx_cnt*: uint32
-        fst_idx*: uint32
-        mtl_idx*: uint32
-
-    Material* = object
-        diffuse*    : Texture
-        base_colour*: Vec4
+    Tile* = uint8
 
 var pipeln : GraphicsPipeline
 var sampler: Sampler
 
 proc init*(dev: Device; win: Window) =
-    let vtx_shader  = dev.create_shader_from_file(shaderVertex  , ShaderDir / "model.vert.spv", uniform_buf_cnt = 1)
-    let frag_shader = dev.create_shader_from_file(shaderFragment, ShaderDir / "model.frag.spv", sampler_cnt = 1)
+    let vtx_shader  = dev.create_shader_from_file(shaderVertex  , ShaderDir / "tilemap.vert.spv", uniform_buf_cnt = 1)
+    let frag_shader = dev.create_shader_from_file(shaderFragment, ShaderDir / "tilemap.frag.spv", sampler_cnt = 1)
     let ct_descr = ColourTargetDescription(
         fmt: dev.swapchain_tex_fmt win,
         blend_state: ColourTargetBlendState(
@@ -46,12 +29,7 @@ proc init*(dev: Device; win: Window) =
         ),
     )
     pipeln = dev.create_graphics_pipeline(vtx_shader, frag_shader,
-        vertex_input_state(
-            [vtx_descr(0, sizeof Vertex, inputVertex)],
-            [vtx_attr(0, 0, vtxElemFloat3, Vertex.offsetof pos),
-             vtx_attr(1, 0, vtxElemFloat2, Vertex.offsetof uv),
-             vtx_attr(2, 0, vtxElemFloat3, Vertex.offsetof normal)],
-        ),
+        vertex_input_state([], []),
         target_info = GraphicsPipelineTargetInfo(
             colour_target_descrs    : ct_descr.addr,
             colour_target_cnt       : 1,
@@ -75,20 +53,15 @@ proc init*(dev: Device; win: Window) =
     dev.destroy vtx_shader
     dev.destroy frag_shader
 
-proc draw*(ren_pass: RenderPass; mdl: ref Model) =
+proc create*(w: Natural; h: Natural): Tilemap =
+    result = Tilemap(
+        w: uint32 w,
+        h: uint32 h,
+        tiles: new_seq_with(h, new_seq[Tile] w),
+    )
+    info &"Created new tilemap ({w}x{h} = {result.w*result.h} tiles)"
+
+proc draw*(ren_pass: RenderPass; map: Tilemap) =
     with ren_pass:
         `bind` pipeln
-        `bind` 0, [BufferBinding(buf: mdl.vbo)]
-        `bind` BufferBinding(buf: mdl.ibo), elemSz32
-    for mesh in mdl.meshes:
-        if mesh.vtx_cnt == 0:
-            break
-
-        let diffuse = mdl.mtls[mesh.mtl_idx].diffuse
-        ren_pass.`bind` 0, [TextureSamplerBinding(tex: diffuse, sampler: sampler)]
-        ren_pass.draw_indexed mesh.vtx_cnt, fst_idx = mesh.fst_idx
-
-proc cleanup*(dev: Device) =
-    with dev:
-        destroy sampler
-        destroy pipeln
+        draw map.w*map.h

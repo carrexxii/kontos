@@ -54,8 +54,8 @@ var
 proc init*(dev: Device; win: sdl.Window) =
     proj = orthogonal(0, 1280, 800, 0, 0.1, 1.0)
 
-    let vtx_shader  = dev.create_shader_from_file(shaderVertex  , ShaderDir / "ui.vert.spv", uniform_buf_count = 1)
-    let frag_shader = dev.create_shader_from_file(shaderFragment, ShaderDir / "ui.frag.spv", sampler_count = 1)
+    let vtx_shader  = dev.create_shader_from_file(shaderVertex  , ShaderDir / "ui.vert.spv", uniform_buf_cnt = 1)
+    let frag_shader = dev.create_shader_from_file(shaderFragment, ShaderDir / "ui.frag.spv", sampler_cnt = 1)
     let ct_descr = ColourTargetDescription(
         fmt: dev.swapchain_tex_fmt win,
         blend_state: ColourTargetBlendState(
@@ -79,7 +79,7 @@ proc init*(dev: Device; win: sdl.Window) =
         ),
         target_info = GraphicsPipelineTargetInfo(
             colour_target_descrs    : ct_descr.addr,
-            colour_target_count     : 1,
+            colour_target_cnt       : 1,
             depth_stencil_fmt       : texFmtD16Unorm,
             has_depth_stencil_target: true,
         ),
