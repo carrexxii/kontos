@@ -1,10 +1,14 @@
 import
     std/[os, osproc, streams, tables],
-    sdl, sdl/gpu, nai,
-    common, models
+    sdl, sdl/gpu, nai, ngm,
+    common
 from std/strutils import strip
 
-const NaiPath = "lib/nai/nai"
+const
+    NaiPath = "lib/nai/nai"
+
+    MaxMeshCount     = 8
+    MaxMaterialCount = 8
 
 type
     ResourceKind = enum
@@ -13,7 +17,29 @@ type
         case kind: ResourceKind
         of rkModel: mdl: ref Model
 
-var mdls = init_table[string, ref Model]()
+    ModelVertex* = object
+        pos*   : Vec3
+        normal*: Vec3
+        uv*    : Vec2
+
+    Model* = object
+        vbo*   : Buffer
+        ibo*   : Buffer
+        meshes*: array[MaxMeshCount    , Mesh]
+        mtls*  : array[MaxMaterialCount, Material]
+
+    Mesh* = object
+        vtx_cnt*: uint32
+        fst_idx*: uint32
+        mtl_idx*: uint32
+
+    Material* = object
+        diffuse*    : Texture
+        base_colour*: Vec4
+
+var models = init_table[string, ref Model]()
+
+var model_pipeln: GraphicsPipeline
 
 proc convert*(dst, src: string) =
     let dst = dst.add_file_ext ".nai"
@@ -26,7 +52,7 @@ proc convert*(dst, src: string) =
     else:
         info &"Converted file '{src}' to Nai file ({dst})"
 
-proc load_model*(dev: Device; path: string): ref Model =
+proc load_model*(path: string): ref Model =
     result = new Model
     let file  = open_file_stream path
     let fname = (split_file path)[1]
@@ -38,7 +64,7 @@ proc load_model*(dev: Device; path: string): ref Model =
         for err in header_errs:
             error err
 
-    var vtxs: seq[Vertex]
+    var vtxs: seq[ModelVertex]
     var idxs: seq[uint32]
     var mesh_header: MeshHeader
     for i in 0'u16..<header.mesh_cnt:
@@ -47,7 +73,7 @@ proc load_model*(dev: Device; path: string): ref Model =
         result.meshes[i].fst_idx = uint32 idxs.len
         result.meshes[i].mtl_idx = mesh_header.mtl_idx
 
-        let vtx_sz = (int mesh_header.vtx_cnt) * sizeof Vertex
+        let vtx_sz = (int mesh_header.vtx_cnt) * sizeof ModelVertex
         vtxs.set_len_uninit (vtxs.len + int mesh_header.vtx_cnt)
         if file.read_data(vtxs[vtxs.len - int mesh_header.vtx_cnt].addr, vtx_sz) != vtx_sz:
             error &"Failed reading vertex data from model file '{path}'"
@@ -57,18 +83,18 @@ proc load_model*(dev: Device; path: string): ref Model =
         if file.read_data(idxs[idxs.len - int mesh_header.idx_cnt].addr, idx_sz) != idx_sz:
             error &"Failed reading index data from model file '{path}'"
 
-    let vtxs_sz = vtxs.len * sizeof Vertex
+    let vtxs_sz = vtxs.len * sizeof ModelVertex
     let idxs_sz = idxs.len * is32Bit
-    let trans_buf = dev.create_transfer_buffer (vtxs_sz + idxs_sz)
-    result.vbo = dev.create_buffer(bufUsageVertex, vtxs_sz, &"{fname} Vertices ({path})")
-    result.ibo = dev.create_buffer(bufUsageIndex , idxs_sz, &"{fname} Indices ({path})")
+    let trans_buf = device.create_transfer_buffer (vtxs_sz + idxs_sz)
+    result.vbo = device.create_buffer(bufUsageVertex, vtxs_sz, &"{fname} Vertices ({path})")
+    result.ibo = device.create_buffer(bufUsageIndex , idxs_sz, &"{fname} Indices ({path})")
 
     # Copy mesh data to buffers
-    let vtxs_dst = dev.map trans_buf
+    let vtxs_dst = device.map trans_buf
     copy_mem vtxs_dst, vtxs[0].addr, vtxs_sz
     let idxs_dst = cast[pointer](cast[int](vtxs_dst) + vtxs_sz)
     copy_mem idxs_dst, idxs[0].addr, idxs_sz
-    dev.unmap trans_buf
+    device.unmap trans_buf
 
     # Copy textures
     var mtl_header: MaterialHeader
@@ -83,16 +109,16 @@ proc load_model*(dev: Device; path: string): ref Model =
             if file.read_data(pxs, tex_sz) != tex_sz:
                 error &"Failed to read all data for texture from '{path}'"
 
-            let tex = dev.upload(pxs, tex_header.w, tex_header.h, fmt = texFmtR8G8B8A8Unorm)
+            let tex = device.upload(pxs, tex_header.w, tex_header.h, fmt = texFmtR8G8B8A8Unorm)
             case tex_header.kind
             of tkDiffuse: result.mtls[i].diffuse = tex
             else:
                 error &"Unsupported texture kind '{tex_header.kind}'"
 
-            dev.set_tex_name tex, &"{fname} {($tex_header.kind)[2..^1]}"
+            device.set_tex_name tex, &"{fname} {($tex_header.kind)[2..^1]}"
             dealloc pxs
 
-    let cmd_buf   = acquire_cmd_buf dev
+    let cmd_buf   = acquire_cmd_buf device
     let copy_pass = begin_copy_pass cmd_buf
     with copy_pass:
         upload trans_buf, result.vbo, vtxs_sz
@@ -100,16 +126,17 @@ proc load_model*(dev: Device; path: string): ref Model =
         `end`
     submit cmd_buf
 
-    dev.destroy trans_buf
+    device.destroy trans_buf
     close file
-    mdls[path] = result
+    models[path] = result
 
     debug &"Loaded model '{path}' with {vtxs.len} vertices/{idxs.len} indices"
 
-proc cleanup*(dev: Device) =
-    for mdl in mdls.values:
-        dev.destroy mdl.vbo
-        dev.destroy mdl.ibo
+proc cleanup*() =
+    info "Cleaning up resources..."
+    for mdl in models.values:
+        device.destroy mdl.vbo
+        device.destroy mdl.ibo
         for mtl in mdl.mtls:
             if mtl.diffuse:
-                dev.destroy mtl.diffuse
+                device.destroy mtl.diffuse

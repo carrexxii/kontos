@@ -53,3 +53,11 @@ task build_shaders, "Build shaders":
 task run, "Run":
     build_shaders_task()
     run &"nim c -r {entry}"
+
+task gdb, "Run in GF2":
+    build_shaders_task()
+    run &"nim c --debugger:native {entry} && nim-gdb -tui ./kontos"
+
+task gf, "Run in GF2":
+    build_shaders_task()
+    run &"nim c --debugger:native {entry} && gf2 ./kontos"

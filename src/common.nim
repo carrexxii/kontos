@@ -1,12 +1,19 @@
-import std/[with, logging], compat
+import std/[with, logging], compat, config
 from std/os        import `/`
 from std/strformat import `&`
-export compat, with, `/`, `&`
+from sdl     import Window
+from sdl/gpu import Device
+export compat, config, with, `/`, `&`
 
 const
     FontDir*   = "res/fonts"
     ShaderDir* = "res/shaders"
     ModelDir*  = "res/models"
+
+#[ -------------------------------------------------------------------- ]#
+
+var window*: Window
+var device*: Device
 
 #[ -------------------------------------------------------------------- ]#
 

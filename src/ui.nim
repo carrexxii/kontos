@@ -36,7 +36,7 @@ let
     )
 
 var
-    ui_ctx*: Context
+    context*: Context
 
     atlas     : FontAtlas
     font_tex  : Texture
@@ -49,15 +49,12 @@ var
     nk_cmds   : nk.Buffer
     nk_vtxs   : nk.Buffer
     nk_idxs   : nk.Buffer
-    proj      : Mat4x4
 
-proc init*(dev: Device; win: sdl.Window) =
-    proj = orthogonal(0, 1280, 800, 0, 0.1, 1.0)
-
-    let vtx_shader  = dev.create_shader_from_file(shaderVertex  , ShaderDir / "ui.vert.spv", uniform_buf_cnt = 1)
-    let frag_shader = dev.create_shader_from_file(shaderFragment, ShaderDir / "ui.frag.spv", sampler_cnt = 1)
+proc init*() =
+    let vtx_shader  = device.create_shader_from_file(shaderVertex  , ShaderDir / "ui.vert.spv", uniform_buf_cnt = 1)
+    let frag_shader = device.create_shader_from_file(shaderFragment, ShaderDir / "ui.frag.spv", sampler_cnt = 1)
     let ct_descr = ColourTargetDescription(
-        fmt: dev.swapchain_tex_fmt win,
+        fmt: device.swapchain_tex_fmt window,
         blend_state: ColourTargetBlendState(
             src_colour_blend_factor : blendFacSrcAlpha,
             dst_colour_blend_factor : blendFacOneMinusAlpha,
@@ -70,7 +67,7 @@ proc init*(dev: Device; win: sdl.Window) =
             enable_colour_write_mask: false,
         ),
     )
-    pipeln = dev.create_graphics_pipeline(vtx_shader, frag_shader,
+    pipeln = device.create_graphics_pipeline(vtx_shader, frag_shader,
         vertex_input_state(
             [vtx_descr(0, sizeof Vertex, inputVertex)],
             [vtx_attr(0, 0, vtxElemFloat2, Vertex.offsetof pos),
@@ -95,12 +92,12 @@ proc init*(dev: Device; win: sdl.Window) =
         ),
     )
 
-    sampler   = dev.create_sampler()
-    sdl_trans = dev.create_transfer_buffer (VertexBufferSize + IndexBufferSize)
-    sdl_vtxs  = dev.create_buffer(bufUsageVertex, VertexBufferSize, "UI Vertices")
-    sdl_idxs  = dev.create_buffer(bufUsageIndex , IndexBufferSize , "UI Indices")
+    sampler   = device.create_sampler()
+    sdl_trans = device.create_transfer_buffer (VertexBufferSize + IndexBufferSize)
+    sdl_vtxs  = device.create_buffer(bufUsageVertex, VertexBufferSize, "UI Vertices")
+    sdl_idxs  = device.create_buffer(bufUsageIndex , IndexBufferSize , "UI Indices")
 
-    dev.set_tex_name font_tex, "UI Font Atlas"
+    device.set_tex_name font_tex, "UI Font Atlas"
 
     # Nuklear
     nk_cmds = create_buffer CommandBufferSize
@@ -124,17 +121,27 @@ proc init*(dev: Device; win: sdl.Window) =
     begin atlas
     small_font = atlas.add font_cfg
     let (atlas_pxs, atlas_w, atlas_h) = bake atlas
-    font_tex = dev.upload(atlas_pxs, atlas_w, atlas_h, fmt = texFmtA8Unorm)
+    font_tex = device.upload(atlas_pxs, atlas_w, atlas_h, fmt = texFmtA8Unorm)
     `end` atlas, pointer font_tex
     `=destroy` atlas
 
-    init ui_ctx, small_font
+    init context, small_font
 
     # Cleanup
-    dev.destroy vtx_shader
-    dev.destroy frag_shader
+    device.destroy vtx_shader
+    device.destroy frag_shader
 
-    debug "Initialized UI"
+    info "Initialized UI"
+
+proc cleanup*() =
+    debug "Cleaning up UI..."
+    with device:
+        destroy sdl_trans
+        destroy sdl_vtxs
+        destroy sdl_idxs
+        destroy font_tex
+        destroy sampler
+        destroy pipeln
 
 proc add_objects(paths: seq[string]) =
     let ppath = project.get_path()
@@ -153,12 +160,14 @@ proc add_objects(paths: seq[string]) =
                 let src = path
                 save_file_dialog (proc(dst: string) = convert dst, src), default_loc = ppath
 
-proc update*(dev: Device; cmd_buf: gpu.CommandBuffer; win: sdl.Window; w: SomeNumber; h: SomeNumber) =
+proc update*(cmd_buf: gpu.CommandBuffer) =
+    let w = window_size.x
+    let h = window_size.y
     let sb_w = 0.3 * cfloat w
-    ui_ctx.begin nk.Rect(x: (cfloat w) - sb_w, y: 0, w: sb_w, h: cfloat h), winBorder
-    ui_ctx.min_row_height = 100
+    context.begin nk.Rect(x: (cfloat w) - sb_w, y: 0, w: sb_w, h: cfloat h), winBorder
+    context.min_row_height = 100
 
-    ui_ctx.menubar 35, (40, 30):
+    context.menubar 35, (40, 30):
         "File":
             "Add":
                 open_file_dialog add_objects, default_loc = project.get_path()
@@ -173,16 +182,16 @@ proc update*(dev: Device; cmd_buf: gpu.CommandBuffer; win: sdl.Window; w: SomeNu
             "Save As":
                 save_file_dialog project.save_as, default_loc = project.get_path()
     
-    ui_ctx.convert VertexConfig, nk_cmds, nk_vtxs, nk_idxs
+    context.convert VertexConfig, nk_cmds, nk_vtxs, nk_idxs
 
-    var buf_dst = dev.map sdl_trans
+    var buf_dst = device.map sdl_trans
     copy_mem buf_dst, nk_vtxs.mem.mem, nk_vtxs.sz
     buf_dst = cast[pointer](cast[uint](buf_dst) + nk_vtxs.sz)
     copy_mem buf_dst, nk_idxs.mem.mem, nk_idxs.sz
-    dev.unmap sdl_trans
+    device.unmap sdl_trans
 
-    `end` ui_ctx
-    clear ui_ctx
+    `end` context
+    clear context
 
     let copy_pass = begin_copy_pass cmd_buf
     with copy_pass:
@@ -190,8 +199,9 @@ proc update*(dev: Device; cmd_buf: gpu.CommandBuffer; win: sdl.Window; w: SomeNu
         upload sdl_trans, sdl_idxs, nk_idxs.sz, cycle = true, trans_buf_offset = nk_vtxs.sz
         `end`
 
+let ui_projection = orthogonal(0, 1280, 800, 0, 0.1, 1.0)
 proc draw*(ren_pass: RenderPass; cmd_buf: gpu.CommandBuffer) =
-    cmd_buf.push_vtx_uniform 0, proj
+    cmd_buf.push_vtx_uniform 0, ui_projection
     with ren_pass:
         `bind` pipeln
         `bind` 0, [TextureSamplerBinding(tex: font_tex, sampler: sampler)]
@@ -199,7 +209,7 @@ proc draw*(ren_pass: RenderPass; cmd_buf: gpu.CommandBuffer) =
         `bind` BufferBinding(buf: sdl_idxs), elemSz16
 
     var offset = 0'u32
-    for cmd in ui_ctx.commands nk_cmds:
+    for cmd in context.commands nk_cmds:
         if cmd.tex:
             ren_pass.`bind` 0, [TextureSamplerBinding(tex: cmd.tex, sampler: sampler)]
         let r = cmd.clip_rect
@@ -209,13 +219,3 @@ proc draw*(ren_pass: RenderPass; cmd_buf: gpu.CommandBuffer) =
         offset += cmd.elem_count
     ren_pass.scissor = none sdl.Rect
     clear nk_cmds, nk_vtxs, nk_idxs
-
-proc free*(dev: Device) =
-    debug "Freeing UI resources"
-    with dev:
-        destroy sdl_trans
-        destroy sdl_vtxs
-        destroy sdl_idxs
-        destroy font_tex
-        destroy sampler
-        destroy pipeln

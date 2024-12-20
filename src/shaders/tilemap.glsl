@@ -9,10 +9,15 @@ layout(set = 1, binding = 0) uniform Camera {
 	mat4 view;
 } camera;
 
+vec3 verts[6] = {
+    vec3(0, 0, 0), vec3(1, 0, 0), vec3(0, 1, 0),
+    vec3(0, 1, 0), vec3(1, 0, 0), vec3(1, 1, 0),
+};
+
 void main()
 {
     out_uv = vec2(0, 0);
-    vec4 pos = vec4(0, 0, 0, 1);
+    vec4 pos = vec4(verts[gl_VertexIndex % 6] + verts[gl_VertexIndex % 6]*gl_VertexIndex, 1);
     gl_Position = camera.proj * camera.view * pos;
 }
 
