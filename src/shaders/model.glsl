@@ -10,8 +10,8 @@ layout(location = 0) out vec2 out_uv;
 layout(location = 1) out vec3 out_normal;
 
 layout(set = 1, binding = 0) uniform Camera {
-	mat4 proj;
-	mat4 view;
+    mat4 proj;
+    mat4 view;
 } camera;
 
 void main()

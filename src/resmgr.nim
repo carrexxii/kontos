@@ -17,6 +17,8 @@ type
         case kind: ResourceKind
         of rkModel: mdl: ref Model
 
+    TileData* = uint32
+
     ModelVertex* = object
         pos*   : Vec3
         normal*: Vec3

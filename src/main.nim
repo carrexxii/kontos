@@ -9,6 +9,7 @@ var map: Tilemap
 
 proc shutdown(_: bool) {.noReturn.} =
     info "Shutting down..."
+    `=destroy` map
     resmgr.cleanup()
     ui.cleanup()
     renderer.cleanup()
@@ -36,8 +37,8 @@ proc init*() =
 
     renderer.add load_model "tests/res/models/fish.nai"
 
-    map = tilemap.create(64, 32)
-    # set_map map.addr
+    map = tilemap.create(64, 64)
+    set_map map.addr
 
     kcBackspace.map proc(was_down: bool) =
         camera.pos = vec3( 1,  1,  0)
@@ -58,12 +59,10 @@ proc init*() =
 
 proc loop*() =
     info " === Starting Main Loop === "
-    var running = true
-    while running:
+    while true:
         input.update()
         update camera
         draw camera.view, camera.proj
 
 init()
 loop()
-shutdown true

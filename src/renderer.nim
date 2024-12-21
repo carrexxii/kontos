@@ -1,40 +1,25 @@
-import sdl, sdl/gpu, common, resmgr
+import sdl, sdl/gpu, common, resmgr, tilemap
 from std/options import some
 from ngm     import Mat4x4
 from input   import map
 from ui      import update, draw
-from tilemap import Tilemap
 
-type
-    RenderObject* = object
-        mdl*: ref Model
+const DepthTextureFormat = texFmtD16Unorm
 
 var
-    sampler       : Sampler
     model_pipeln  : GraphicsPipeline
     tilemap_pipeln: GraphicsPipeline
+    sampler       : Sampler
+    depth_tex     : Texture
 
-var depth_tex: Texture
-var map      : ptr Tilemap
-var models   : seq[ref Model]
+    models: seq[ref Model]
+    map   : ptr Tilemap
 
-device.set_tex_name depth_tex, "Depth Texture"
+    fill_mode = fmFill
 
-proc toggle_fill*(was_down: bool) =
-    if was_down:
-        return
+proc toggle_fill*(was_down: bool)
 
-proc init*() =
-    device = create_device(ShaderFormat, true)
-    window = create_window(WindowTitle, window_size.x, window_size.y, winNone)
-    device.claim window
-
-    depth_tex = device.create_texture(window_size.x, window_size.y, fmt = texFmtD16Unorm, usage = texUsageDepthStencilTarget)
-
-    kcTab.map toggle_fill
-
-    # Pipelines
-    sampler = device.create_sampler()
+proc create_pipelines() =
     var ct_descr = ColourTargetDescription(
         fmt: device.swapchain_tex_fmt window,
         blend_state: ColourTargetBlendState(
@@ -63,61 +48,77 @@ proc init*() =
             target_info = GraphicsPipelineTargetInfo(
                 colour_target_descrs    : ct_descr.addr,
                 colour_target_cnt       : 1,
-                depth_stencil_fmt       : texFmtD16Unorm,
+                depth_stencil_fmt       : DepthTextureFormat,
                 has_depth_stencil_target: true,
             ),
             depth_stencil_state = DepthStencilState(
-                compare_op         : cmpGreater,
-                back_stencil_state : StencilOpState(),
-                front_stencil_state: StencilOpState(),
-                compare_mask       : 0xFF,
-                write_mask         : 0xFF,
-                enable_depth_test  : true,
-                enable_depth_write : true,
-                enable_stencil_test: false,
+                compare_op        : cmpGreater,
+                enable_depth_test : true,
+                enable_depth_write: true,
             ),
+            raster_state = RasterizerState(fill_mode: fill_mode),
         )
 
         device.destroy vtx_shader
         device.destroy frag_shader
 
     block: # Tilemap Pipeline
-        let vtx_shader  = device.create_shader_from_file(shaderVertex  , ShaderDir / "tilemap.vert.spv", uniform_buf_cnt = 1)
+        let vtx_shader  = device.create_shader_from_file(shaderVertex  , ShaderDir / "tilemap.vert.spv", uniform_buf_cnt = 1, storage_buf_cnt = 1)
         let frag_shader = device.create_shader_from_file(shaderFragment, ShaderDir / "tilemap.frag.spv", sampler_cnt = 1)
         tilemap_pipeln = device.create_graphics_pipeline(vtx_shader, frag_shader,
             vertex_input_state([], []),
             target_info = GraphicsPipelineTargetInfo(
                 colour_target_descrs    : ct_descr.addr,
                 colour_target_cnt       : 1,
-                depth_stencil_fmt       : texFmtD16Unorm,
+                depth_stencil_fmt       : DepthTextureFormat,
                 has_depth_stencil_target: true,
             ),
             depth_stencil_state = DepthStencilState(
-                compare_op         : cmpGreater,
-                back_stencil_state : StencilOpState(),
-                front_stencil_state: StencilOpState(),
-                compare_mask       : 0xFF,
-                write_mask         : 0xFF,
-                enable_depth_test  : true,
-                enable_depth_write : true,
-                enable_stencil_test: false,
+                compare_op        : cmpGreater,
+                enable_depth_test : true,
+                enable_depth_write: true,
             ),
+            raster_state = RasterizerState(fill_mode: fill_mode),
         )
 
         device.destroy vtx_shader
         device.destroy frag_shader
 
+proc init*() =
+    device = create_device(ShaderFormat, true)
+    window = create_window(WindowTitle, window_size.x, window_size.y, winNone)
+    device.claim window
+
+    sampler = device.create_sampler()
+
+    depth_tex = device.create_texture(window_size.x, window_size.y, fmt = DepthTextureFormat, usage = texUsageDepthStencilTarget)
+    device.set_tex_name depth_tex, "Depth Texture"
+
+    when not defined Release:
+        kcTab.map toggle_fill
+
+    create_pipelines()
+
     info "Initialized renderer"
 
-proc cleanup*() =
-    info "Cleaning up renderer..."
+proc cleanup*(only_pipelns = false) =
+    if not only_pipelns:
+        info "Cleaning up renderer..."
+    device.destroy model_pipeln
+    device.destroy tilemap_pipeln
+    if only_pipelns:
+        return
+
     with device:
         destroy depth_tex
         destroy sampler
-
-        destroy model_pipeln
-        destroy tilemap_pipeln
         destroy
+
+proc toggle_fill*(was_down: bool) =
+    if was_down:
+        fill_mode = (if fill_mode == fmFill: fmLine else: fmFill)
+        cleanup only_pipelns = true
+        create_pipelines()
 
 proc set_map*(m: ptr Tilemap) =
     map = m
@@ -136,20 +137,21 @@ proc draw_models(ren_pass: RenderPass) =
             `bind` BufferBinding(buf: mdl.ibo), elemSz32
         for mesh in mdl.meshes:
             if mesh.vtx_cnt == 0:
-                break
+                continue
 
             let diffuse = mdl.mtls[mesh.mtl_idx].diffuse
             ren_pass.`bind` 0, [TextureSamplerBinding(tex: diffuse, sampler: sampler)]
             ren_pass.draw_indexed mesh.vtx_cnt, fst_idx = mesh.fst_idx
 
-proc draw_tilemap(ren_pass: RenderPass) =
+proc draw_tilemap(ren_pass: RenderPass; cmd_buf: CommandBuffer) =
     if map == nil:
         return
 
-    let map = map[]
+    let vtx_cnt = 6*map.w*map.h
     with ren_pass:
+        `bind` 0, [map.buf]
         `bind` tilemap_pipeln
-        draw 6*map.w*map.h
+        draw vtx_cnt
 
 proc draw*(view, proj: Mat4x4) =
     let
@@ -177,8 +179,8 @@ proc draw*(view, proj: Mat4x4) =
     let ren_pass = begin_render_pass(cmd_buf, [target_info], some depth_info)
     cmd_buf.push_vtx_uniform 0, [proj, view]
     with ren_pass:
-        draw_tilemap
         draw_models
+        draw_tilemap cmd_buf
         ui.draw cmd_buf
         `end`
     submit cmd_buf
