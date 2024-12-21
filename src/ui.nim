@@ -51,8 +51,8 @@ var
     nk_idxs   : nk.Buffer
 
 proc init*() =
-    let vtx_shader  = device.create_shader_from_file(shaderVertex  , ShaderDir / "ui.vert.spv", uniform_buf_cnt = 1)
-    let frag_shader = device.create_shader_from_file(shaderFragment, ShaderDir / "ui.frag.spv", sampler_cnt = 1)
+    let vtx_shader  = load_shader("ui.vert", ubo_cnt = 1)
+    let frag_shader = load_shader("ui.frag", sampler_cnt = 1)
     let ct_descr = ColourTargetDescription(
         fmt: device.swapchain_tex_fmt window,
         blend_state: ColourTargetBlendState(
@@ -126,11 +126,6 @@ proc init*() =
     `=destroy` atlas
 
     init context, small_font
-
-    # Cleanup
-    device.destroy vtx_shader
-    device.destroy frag_shader
-
     info "Initialized UI"
 
 proc cleanup*() =

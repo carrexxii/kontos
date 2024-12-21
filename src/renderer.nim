@@ -36,8 +36,8 @@ proc create_pipelines() =
     )
 
     block: # Model Pipeline
-        let vtx_shader  = device.create_shader_from_file(shaderVertex  , ShaderDir / "model.vert.spv", uniform_buf_cnt = 1)
-        let frag_shader = device.create_shader_from_file(shaderFragment, ShaderDir / "model.frag.spv", sampler_cnt = 1)
+        let vtx_shader  = load_shader("model.vert", ubo_cnt = 1)
+        let frag_shader = load_shader("model.frag", sampler_cnt = 1)
         model_pipeln = device.create_graphics_pipeline(vtx_shader, frag_shader,
             vertex_input_state(
                 [vtx_descr(0, sizeof ModelVertex, inputVertex)],
@@ -59,12 +59,9 @@ proc create_pipelines() =
             raster_state = RasterizerState(fill_mode: fill_mode),
         )
 
-        device.destroy vtx_shader
-        device.destroy frag_shader
-
     block: # Tilemap Pipeline
-        let vtx_shader  = device.create_shader_from_file(shaderVertex  , ShaderDir / "tilemap.vert.spv", uniform_buf_cnt = 1, storage_buf_cnt = 1)
-        let frag_shader = device.create_shader_from_file(shaderFragment, ShaderDir / "tilemap.frag.spv", sampler_cnt = 1)
+        let vtx_shader  = load_shader("tilemap.vert", ubo_cnt = 1, sbo_cnt = 1)
+        let frag_shader = load_shader("tilemap.frag", sampler_cnt = 1)
         tilemap_pipeln = device.create_graphics_pipeline(vtx_shader, frag_shader,
             vertex_input_state([], []),
             target_info = GraphicsPipelineTargetInfo(
@@ -80,9 +77,6 @@ proc create_pipelines() =
             ),
             raster_state = RasterizerState(fill_mode: fill_mode),
         )
-
-        device.destroy vtx_shader
-        device.destroy frag_shader
 
 proc init*() =
     device = create_device(ShaderFormat, true)

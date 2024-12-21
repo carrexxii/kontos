@@ -12,10 +12,12 @@ const
 
 type
     ResourceKind = enum
+        rkShader
         rkModel
     Resource = object
         case kind: ResourceKind
-        of rkModel: mdl: ref Model
+        of rkShader: shader: Shader
+        of rkModel : mdl   : ref Model
 
     TileData* = uint32
 
@@ -39,9 +41,7 @@ type
         diffuse*    : Texture
         base_colour*: Vec4
 
-var models = init_table[string, ref Model]()
-
-var model_pipeln: GraphicsPipeline
+var resources = init_table[string, Resource]()
 
 proc convert*(dst, src: string) =
     let dst = dst.add_file_ext ".nai"
@@ -54,7 +54,38 @@ proc convert*(dst, src: string) =
     else:
         info &"Converted file '{src}' to Nai file ({dst})"
 
+proc load_shader*(name: string; sampler_cnt, storage_tex_cnt, sbo_cnt, ubo_cnt = 0): Shader =
+    let path = ShaderDir / (name & ".spv")
+    if name in resources:
+        let res = resources[name]
+        if res.kind != rkShader:
+            error &"Resource '{name}' ({path}) already exists but has kind `{res.kind}` (expected `{rkShader}`)"
+        return res.shader
+
+    let (_, fname, ext) = split_file name
+    let stage = case ext
+    of ".vertex"  , ".vert", ".vtx", ".vs": shaderVertex
+    of ".fragment", ".frag", ".frg", ".fs": shaderFragment
+    else:
+        error &"Could not determine shader kind from extension '{ext}' for '{name}' ({path})"
+        return
+
+    result = device.create_shader_from_file(stage, path,
+        sampler_cnt     = sampler_cnt,
+        storage_tex_cnt = storage_tex_cnt,
+        storage_buf_cnt = sbo_cnt,
+        uniform_buf_cnt = ubo_cnt,
+    )
+    resources[name] = Resource(kind: rkShader, shader: result)
+    debug &"Loaded shader '{name}' ({path})"
+
 proc load_model*(path: string): ref Model =
+    if path in resources:
+        let res = resources[path]
+        if res.kind != rkModel:
+            error &"Resource for path '{path}' already exists but has kind `{res.kind}` (expected `{rkModel}`)"
+        return res.mdl
+
     result = new Model
     let file  = open_file_stream path
     let fname = (split_file path)[1]
@@ -130,15 +161,21 @@ proc load_model*(path: string): ref Model =
 
     device.destroy trans_buf
     close file
-    models[path] = result
 
+    resources[path] = Resource(kind: rkModel, mdl: result)
     debug &"Loaded model '{path}' with {vtxs.len} vertices/{idxs.len} indices"
 
 proc cleanup*() =
     info "Cleaning up resources..."
-    for mdl in models.values:
-        device.destroy mdl.vbo
-        device.destroy mdl.ibo
-        for mtl in mdl.mtls:
-            if mtl.diffuse:
-                device.destroy mtl.diffuse
+    for res in resources.values:
+        case res.kind
+        of rkShader:
+            device.destroy res.shader
+        of rkModel:
+            device.destroy res.mdl.vbo
+            device.destroy res.mdl.ibo
+            for mtl in res.mdl.mtls:
+                if mtl.diffuse:
+                    device.destroy mtl.diffuse
+
+    reset resources
