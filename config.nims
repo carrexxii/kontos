@@ -47,8 +47,11 @@ task build_shaders, "Build shaders":
     let shaders = list_files shader_src
     for shader in shaders:
         let fname = shader.split_path.tail
-        run &"""glslangValidator {shader} -V -S vert -o {shader_out / fname.replace(".glsl", ".vert.spv")} --quiet -DVERTEX"""
-        run &"""glslangValidator {shader} -V -S frag -o {shader_out / fname.replace(".glsl", ".frag.spv")} --quiet -DFRAGMENT"""
+        if fname.ends_with ".comp":
+            run &"""glslangValidator {shader} -V -S comp -o {shader_out / fname.replace(".comp", ".comp.spv")} --quiet"""
+        else:
+            run &"""glslangValidator {shader} -V -S vert -o {shader_out / fname.replace(".glsl", ".vert.spv")} --quiet -DVERTEX"""
+            run &"""glslangValidator {shader} -V -S frag -o {shader_out / fname.replace(".glsl", ".frag.spv")} --quiet -DFRAGMENT"""
 
 task run, "Run":
     build_shaders_task()

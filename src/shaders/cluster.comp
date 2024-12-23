@@ -1,0 +1,55 @@
+#version 460
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+struct Cluster {
+    vec4 min;
+    vec4 max;
+    uint count;
+    uint lights[128];
+};
+layout(set = 1, binding = 0) restrict writeonly buffer Clusters {
+    Cluster clusters[];
+};
+
+layout(set = 2, binding = 0) uniform Camera {
+    mat4  proj_inv;
+    uvec4 grid_sz;
+    uvec2 dim;
+    float znear;
+    float zfar;
+} cam;
+
+vec3 line_intersect_zplane(vec3 start, vec3 end, float dist)
+{
+    vec3 dir    = normalize(end - start);
+    vec3 normal = vec3(0.0, 0.0, -1.0);
+
+    float t = (dist - dot(normal, start)) / dot(normal, dir);
+    return start + t*dir;
+}
+
+vec3 screen_to_view(vec2 screen_coord)
+{
+    vec4 ndc = vec4(2.0*screen_coord/cam.dim - 1.0, -1.0, 1.0);
+    vec4 view_coord = cam.proj_inv * ndc;
+
+    return (view_coord / view_coord.w).xyz;
+}
+
+void main()
+{
+    uint tile_idx = gl_WorkGroupID.x + gl_WorkGroupID.y*cam.grid_sz.x + gl_WorkGroupID.z*cam.grid_sz.x*cam.grid_sz.y;
+    vec2 tile_sz  = cam.dim / cam.grid_sz.xy;
+
+    vec3 min_tile = screen_to_view(gl_WorkGroupID.xy * tile_sz);
+    vec3 max_tile = screen_to_view((gl_WorkGroupID.xy + 1) * tile_sz);
+
+    float ar = cam.zfar / cam.znear;
+    float plane_near = cam.znear * pow(ar, gl_WorkGroupID.z / cam.grid_sz.z);
+    float plane_far  = cam.znear * pow(ar, (gl_WorkGroupID.z + 1) / cam.grid_sz.z);
+
+    clusters[tile_idx].min = vec4(min(line_intersect_zplane(vec3(0), min_tile, plane_near),
+                                      line_intersect_zplane(vec3(0), min_tile, plane_far)), 0.0);
+    clusters[tile_idx].max = vec4(max(line_intersect_zplane(vec3(0), max_tile, plane_near),
+                                      line_intersect_zplane(vec3(0), max_tile, plane_far)), 0.0);
+}
