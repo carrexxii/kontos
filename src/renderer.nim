@@ -1,8 +1,7 @@
-import sdl, sdl/gpu, common, resmgr, tilemap
+import sdl, sdl/gpu, ngm, common, resmgr, tilemap, svg
 from std/options import some
-from ngm     import Mat4x4
-from input   import map
-from ui      import update, draw
+from input import map
+from ui    import update, draw
 
 const DepthTextureFormat = texFmtD16Unorm
 
@@ -12,7 +11,7 @@ var
     sampler       : Sampler
     depth_tex     : Texture
 
-    models: seq[ref Model]
+    models: seq[ref VectorModel]
     map   : ptr Tilemap
 
     fill_mode = fmFill
@@ -35,15 +34,13 @@ proc create_pipelines() =
         ),
     )
 
-    block: # Model Pipeline
-        let vtx_shader  = load_shader("model.vert", ubo_cnt = 1)
-        let frag_shader = load_shader("model.frag", sampler_cnt = 1)
+    block: # VectorModel Pipeline
+        let vtx_shader  = load_shader "vectormodel.vert"
+        let frag_shader = load_shader "vectormodel.frag"
         model_pipeln = device.create_graphics_pipeline(vtx_shader, frag_shader,
             vertex_input_state(
-                [vtx_descr(0, sizeof ModelVertex, inputVertex)],
-                [vtx_attr(0, 0, vtxElemFloat3, ModelVertex.offsetof pos),
-                 vtx_attr(1, 0, vtxElemFloat2, ModelVertex.offsetof uv),
-                 vtx_attr(2, 0, vtxElemFloat3, ModelVertex.offsetof normal)],
+                [vtx_descr(0, sizeof svg.Vertex, inputVertex)],
+                [vtx_attr(0, 0, vtxElemFloat2, svg.Vertex.offsetof pos)],
             ),
             target_info = GraphicsPipelineTargetInfo(
                 colour_target_descrs    : ct_descr.addr,
@@ -79,7 +76,7 @@ proc create_pipelines() =
         )
 
 proc init*() =
-    device = create_device(ShaderFormat, true)
+    device = create_device(ShaderFormat, not defined Release)
     window = create_window(WindowTitle, window_size.x, window_size.y, winNone)
     device.claim window
 
@@ -98,8 +95,9 @@ proc init*() =
 proc cleanup*(only_pipelns = false) =
     if not only_pipelns:
         info "Cleaning up renderer..."
-    device.destroy model_pipeln
-    device.destroy tilemap_pipeln
+    with device:
+        destroy model_pipeln
+        destroy tilemap_pipeln
     if only_pipelns:
         return
 
@@ -117,25 +115,19 @@ proc toggle_fill*(was_down: bool) =
 proc set_map*(m: ptr Tilemap) =
     map = m
 
-proc add*(mdl: ref Model) =
+proc add*(mdl: ref VectorModel) =
     models.add mdl
 
 proc clear*() =
     models.set_len 0
 
 proc draw_models(ren_pass: RenderPass) =
+    ren_pass.`bind` model_pipeln
     for mdl in models:
         with ren_pass:
-            `bind` model_pipeln
             `bind` 0, [BufferBinding(buf: mdl.vbo)]
-            `bind` BufferBinding(buf: mdl.ibo), elemSz32
-        for mesh in mdl.meshes:
-            if mesh.vtx_cnt == 0:
-                continue
-
-            let diffuse = mdl.mtls[mesh.mtl_idx].diffuse
-            ren_pass.`bind` 0, [TextureSamplerBinding(tex: diffuse, sampler: sampler)]
-            ren_pass.draw_indexed mesh.vtx_cnt, fst_idx = mesh.fst_idx
+            `bind` BufferBinding(buf: mdl.ibo), elemSz16
+            draw_indexed mdl.idx_cnt
 
 proc draw_tilemap(ren_pass: RenderPass; cmd_buf: CommandBuffer) =
     if map == nil:
@@ -147,7 +139,7 @@ proc draw_tilemap(ren_pass: RenderPass; cmd_buf: CommandBuffer) =
         `bind` tilemap_pipeln
         draw vtx_cnt
 
-proc draw*(view, proj: Mat4x4) =
+proc draw*(cam: Camera3D) =
     let
         cmd_buf = acquire_cmd_buf device
         screen  = cmd_buf.swapchain_tex window
@@ -171,10 +163,10 @@ proc draw*(view, proj: Mat4x4) =
     ui.update cmd_buf
 
     let ren_pass = begin_render_pass(cmd_buf, [target_info], some depth_info)
-    cmd_buf.push_vtx_uniform 0, [proj, view]
+    cmd_buf.push_vtx_uniform 0, [cam.proj, cam.view]
     with ren_pass:
         draw_models
-        draw_tilemap cmd_buf
-        ui.draw cmd_buf
+        # draw_tilemap cmd_buf
+        # ui.draw cmd_buf
         `end`
     submit cmd_buf
