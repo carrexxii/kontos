@@ -11,8 +11,8 @@ var
     sampler       : Sampler
     depth_tex     : Texture
 
-    models: seq[ref VectorModel]
-    map   : ptr Tilemap
+    svgs: seq[ref SvgGroup]
+    map : ptr Tilemap
 
     fill_mode = fmFill
 
@@ -35,12 +35,13 @@ proc create_pipelines() =
     )
 
     block: # VectorModel Pipeline
-        let vtx_shader  = load_shader "vectormodel.vert"
-        let frag_shader = load_shader "vectormodel.frag"
+        let vtx_shader  = load_shader("svg.vert", sbo_cnt = 1)
+        let frag_shader = load_shader("svg.frag")
         model_pipeln = device.create_graphics_pipeline(vtx_shader, frag_shader,
             vertex_input_state(
                 [vtx_descr(0, sizeof svg.Vertex, inputVertex)],
-                [vtx_attr(0, 0, vtxElemFloat2, svg.Vertex.offsetof pos)],
+                [vtx_attr(0, 0, vtxElemUInt  , svg.Vertex.offsetof id),
+                 vtx_attr(1, 0, vtxElemFloat2, svg.Vertex.offsetof pos)],
             ),
             target_info = GraphicsPipelineTargetInfo(
                 colour_target_descrs    : ct_descr.addr,
@@ -115,19 +116,17 @@ proc toggle_fill*(was_down: bool) =
 proc set_map*(m: ptr Tilemap) =
     map = m
 
-proc add*(mdl: ref VectorModel) =
-    models.add mdl
+proc add*(mdl: ref SvgGroup) =
+    svgs.add mdl
 
-proc clear*() =
-    models.set_len 0
-
-proc draw_models(ren_pass: RenderPass) =
+proc draw_svgs(ren_pass: RenderPass) =
     ren_pass.`bind` model_pipeln
-    for mdl in models:
+    for g in svgs:
         with ren_pass:
-            `bind` 0, [BufferBinding(buf: mdl.vbo)]
-            `bind` BufferBinding(buf: mdl.ibo), elemSz16
-            draw_indexed mdl.idx_cnt
+            `bind` 0, [g.tform_buf]
+            `bind` 0, [BufferBinding(buf: g.vbo)]
+            `bind` BufferBinding(buf: g.ibo), elemSz32
+            draw_indexed g.idx_cnt
 
 proc draw_tilemap(ren_pass: RenderPass; cmd_buf: CommandBuffer) =
     if map == nil:
@@ -165,7 +164,7 @@ proc draw*(cam: Camera3D) =
     let ren_pass = begin_render_pass(cmd_buf, [target_info], some depth_info)
     cmd_buf.push_vtx_uniform 0, [cam.proj, cam.view]
     with ren_pass:
-        draw_models
+        draw_svgs
         # draw_tilemap cmd_buf
         # ui.draw cmd_buf
         `end`

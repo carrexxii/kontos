@@ -1,29 +1,35 @@
 import
     std/[xmltree, xmlparser, strutils],
     sdl, sdl/gpu, ngm,
-    common
+    common, ptrarith
 
 const MaxLod = 3
 
 type
-    VectorModel* = object
-        vbo*: Buffer
-        ibo*: Buffer
-        vtx_cnt*: uint16
-        idx_cnt*: uint16
+    SvgGroup* = object
+        vbo*      : Buffer
+        ibo*      : Buffer
+        tbo*      : TransferBuffer
+        idx_cnt*  : uint32
+        tforms*   : seq[Mat4]
+        tform_buf*: Buffer
 
     Vertex* = object
+        id* : uint16
         pos*: Vec2
 
     ElementKind = enum
         ekRect
-        ekCircle
+        ekEllipse
     Element = object
-        id   : string
-        style: Style
+        id*   : string
+        style*: Style
+        rot*  : Radians
+        pos*  : Vec2
+        scale*: Vec2
         case kind: ElementKind
-        of ekRect  : rect     : ngm.Rect
-        of ekCircle: cx, cy, r: float32
+        of ekRect, ekEllipse:
+            w, h: float32
 
     Style = object
         colour: uint32
@@ -32,18 +38,17 @@ var xml_errs: seq[string]
 
 func vtx_cnt*(ek: ElementKind): int =
     case ek
-    of ekRect  : result = 4
-    of ekCircle: result = 3*2^MaxLod
+    of ekRect   : 4
+    of ekEllipse: 3*2^MaxLod
 
 func idx_cnt*(ek: ElementKind): int =
     case ek
-    of ekRect:
-        result = 6
-    of ekCircle:
-        result = 1
+    of ekRect: 6
+    of ekEllipse:
+        var cnt = 1
         for i in 1..MaxLod:
-            result += 3*2^(i - 1)
-        result *= 3
+            cnt += 3*2^(i - 1)
+        3*cnt
 
 proc parse_measurement(n: string): float =
     let num_end = n.rfind {'0'..'9'}
@@ -55,35 +60,44 @@ proc parse_measurement(n: string): float =
         error &"Failed to convert units {suffix} for '{n}'"
         num
 
-proc triangulate*(elems: seq[Element]): tuple[vtxs: seq[Vertex]; idxs: seq[uint16]] =
+proc triangulate*(elems: seq[Element]; canvas_w, canvas_h: float32): ref SvgGroup =
+    result = new SvgGroup
+    result.tforms = new_seq_of_cap[Mat4] elems.len
+
     var vtx_cnt, idx_cnt: int
     for elem in elems:
         vtx_cnt += elem.kind.vtx_cnt
         idx_cnt += elem.kind.idx_cnt
-    result.vtxs = new_seq_of_cap[Vertex] vtx_cnt
-    result.idxs = new_seq_of_cap[uint16] idx_cnt
+    var vtxs = new_seq_of_cap[Vertex] vtx_cnt
+    var idxs = new_seq_of_cap[uint32] idx_cnt
 
     for elem in elems:
-        let fst_idx = result.vtxs.len
+        result.tforms.add Mat4Ident
+
+        let fst_idx = vtxs.len
         case elem.kind
         of ekRect:
-            let m = max(elem.rect.w, elem.rect.h)
-            let w = elem.rect.w / m
-            let h = elem.rect.h / m
-            result.vtxs.add Vertex(pos: vec(0.0, 0.0))
-            result.vtxs.add Vertex(pos: vec(w  , 0.0))
-            result.vtxs.add Vertex(pos: vec(w  , h  ))
-            result.vtxs.add Vertex(pos: vec(0.0, h  ))
+            let m = max(elem.w, elem.h)
+            let w = elem.w / m
+            let h = elem.h / m
+            vtxs.add Vertex(pos: vec(0.0, 0.0))
+            vtxs.add Vertex(pos: vec(w  , 0.0))
+            vtxs.add Vertex(pos: vec(w  , h  ))
+            vtxs.add Vertex(pos: vec(0.0, h  ))
 
             for i in [0, 1, 2, 0, 2, 3]:
-                result.idxs.add uint16 (fst_idx + i)
-        of ekCircle:
+                idxs.add uint32 (fst_idx + i)
+        of ekEllipse:
             # Based on https://www.humus.name/index.php?page=News&ID=228
+            let m = max(elem.w, elem.h)
+            let w = elem.w / m
+            let h = elem.h / m
+
             let pt_cnt = 3*2^MaxLod
             var α  = 3*π / 4
             var dα = 2*π / float32 pt_cnt
             for j in 0..pt_cnt - 1:
-                result.vtxs.add Vertex(pos: 0.5*vec(cos α, sin α))
+                vtxs.add Vertex(pos: 0.5*vec(w*cos α, h*sin α))
                 α -= dα
 
             var v = 1 # Vertex of current triangle 1/2/3
@@ -91,11 +105,11 @@ proc triangulate*(elems: seq[Element]): tuple[vtxs: seq[Vertex]; idxs: seq[uint1
             for i in 0..MaxLoD:
                 let ds = 2^(MaxLod - i)
                 while true:
-                    result.idxs.add uint16 (fst_idx + s mod pt_cnt)
+                    idxs.add uint16 (fst_idx + s mod pt_cnt)
                     if s + ds >= pt_cnt and v == 3:
                         break
                     elif v == 3:
-                        result.idxs.add uint16 (fst_idx + s mod pt_cnt)
+                        idxs.add uint32 (fst_idx + s mod pt_cnt)
                         v = 1
 
                     s += ds
@@ -103,8 +117,35 @@ proc triangulate*(elems: seq[Element]): tuple[vtxs: seq[Vertex]; idxs: seq[uint1
                 v = 1
                 s = 0
 
-    assert result.vtxs.len == result.vtxs.capacity, &"{result.vtxs.len} != {result.vtxs.capacity}"
-    assert result.idxs.len == result.idxs.capacity, &"{result.idxs.len} != {result.idxs.capacity}"
+    assert vtxs.len == vtxs.capacity, &"{vtxs.len} != {vtxs.capacity}"
+    assert idxs.len == idxs.capacity, &"{idxs.len} != {idxs.capacity}"
+
+    let vtxs_sz   = vtxs.len * sizeof vtxs[0]
+    let idxs_sz   = idxs.len * sizeof idxs[0]
+    let tforms_sz = elems.len * sizeof Mat4
+    result.idx_cnt   = uint32 idxs.len
+    result.tbo       = device.create_transfer_buffer vtxs_sz + idxs_sz + tforms_sz
+    result.vbo       = device.create_buffer(bufUsageVertex         , vtxs_sz  , "VBO")
+    result.ibo       = device.create_buffer(bufUsageIndex          , idxs_sz  , "IBO")
+    result.tform_buf = device.create_buffer(bufUsageGraphicsStorage, tforms_sz, "Transforms")
+
+    var dst = cast[pointer](device.map result.tbo)
+    with dst:
+        copy_mem vtxs[0].addr, vtxs_sz
+        `+=` vtxs_sz
+        copy_mem idxs[0].addr, idxs_sz
+        `+=` idxs_sz
+        copy_mem result.tforms[0].addr, tforms_sz
+    device.unmap result.tbo
+
+    let cmd_buf   = acquire_cmd_buf device
+    let copy_pass = begin_copy_pass cmd_buf
+    with copy_pass:
+        upload result.tbo, result.vbo      , vtxs_sz  , trans_buf_offset = 0
+        upload result.tbo, result.ibo      , idxs_sz  , trans_buf_offset = vtxs_sz
+        upload result.tbo, result.tform_buf, tforms_sz, trans_buf_offset = vtxs_sz + idxs_sz
+        `end`
+    submit cmd_buf
 
 proc parse_style*(style: string): Style =
     discard
@@ -115,23 +156,24 @@ proc parse_element*(node: XmlNode): Element =
     case node.tag
     of "rect":
         result = Element(kind: ekRect)
-        result.rect = ngm.rect(
-            parse_float node.attr "x",
-            parse_float node.attr "y",
-            parse_float node.attr "width",
-            parse_float node.attr "height"
-        )
-    of "circle":
-        result = Element(kind: ekCircle)
-        result.cx   = parse_float node.attr "cx"
-        result.cy   = parse_float node.attr "cy"
-        result.r    = parse_float node.attr "r"
+        result.pos = [float32 parse_float node.attr "x",
+                      float32 parse_float node.attr "y"]
+        result.w = parse_float node.attr "width"
+        result.h = parse_float node.attr "height"
+    of "circle", "ellipse":
+        result = Element(kind: ekEllipse)
+        result.pos = [float32 parse_float node.attr "cx",
+                      float32 parse_float node.attr "cy"]
+        if node.tag == "circle":
+            result.w = parse_float node.attr "r"
+            result.h = result.w
+        else:
+            result.w = parse_float node.attr "rx"
+            result.h = parse_float node.attr "ry"
     else:
         error "Failed to parse element: " & node.tag
 
-proc load*(path: string): ref VectorModel =
-    var elems = new_seq_of_cap[Element] 8
-
+proc load*(path: string): tuple[elems: seq[Element]; w, h: float32] =
     let xml = load_xml(path, xml_errs, options = {})
     if xml_errs.len > 0:
         error &"XML parsing error in svg file '{path}'"
@@ -140,8 +182,8 @@ proc load*(path: string): ref VectorModel =
 
         xml_errs.set_len 0
 
-    let canvas_w = parse_measurement xml.attr "width"
-    let canvas_h = parse_measurement xml.attr "height"
+    result.w = parse_measurement xml.attr "width"
+    result.h = parse_measurement xml.attr "height"
     for node in xml:
         case node.tag
         of "defs":
@@ -149,16 +191,8 @@ proc load*(path: string): ref VectorModel =
                 assert false
         of "g":
             for child in node:
-                elems.add parse_element child
+                result.elems.add parse_element child
         else:
-            elems.add parse_element node
+            result.elems.add parse_element node
 
-    let mesh = triangulate elems
-    result = new VectorModel
-    result.vbo = device.upload(bufUsageVertex, mesh.vtxs, "SVG VBO")
-    result.ibo = device.upload(bufUsageIndex , mesh.idxs, "SVG IBO")
-    result.vtx_cnt = uint16 mesh.vtxs.len
-    result.idx_cnt = uint16 mesh.idxs.len
-
-    info &"Loaded SVG file with canvas size {canvas_w:.3f}x{canvas_h:.3f} containing {elems.len} elements " &
-         &"triangulated with {mesh.vtxs.len} vertices and {mesh.idxs.len} indices"
+    info &"Loaded SVG file with canvas size {result.w:.3f}x{result.h:.3f} containing {result.elems.len} elements"
