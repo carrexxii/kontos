@@ -1,6 +1,4 @@
 import sdl, sdl/gpu
-from ngm import IVec2, `.`
-export ngm.`.`
 
 const
     ShaderFormat* = shaderFmtSpirV
@@ -8,4 +6,4 @@ const
 
     WindowTitle* {.strdefine.} = "Kontos"
 
-var window_size*: IVec2 = [1280, 800]
+var window_size* = (w: 1280, h: 800)

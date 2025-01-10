@@ -178,4 +178,4 @@ proc cleanup*() =
                 if mtl.diffuse:
                     device.destroy mtl.diffuse
 
-    reset resources
+    clear resources

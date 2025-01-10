@@ -3,7 +3,7 @@ import
     sdl, sdl/gpu, ngm,
     common, ptrarith
 
-const MaxLod = 3
+const MaxLod = 4
 
 type
     SvgGroup* = object
@@ -15,7 +15,7 @@ type
         tform_buf*: Buffer
 
     Vertex* = object
-        id* : uint16
+        id* : uint32
         pos*: Vec2
 
     ElementKind = enum
@@ -27,14 +27,21 @@ type
         rot*  : Radians
         pos*  : Vec2
         scale*: Vec2
-        case kind: ElementKind
+        case kind*: ElementKind
         of ekRect, ekEllipse:
-            w, h: float32
+            w*, h*: float32
 
     Style = object
         colour: uint32
 
 var xml_errs: seq[string]
+
+proc `=destroy`*(g: SvgGroup) =
+    with device:
+        destroy g.vbo
+        destroy g.ibo
+        destroy g.tbo
+        destroy g.tform_buf
 
 func vtx_cnt*(ek: ElementKind): int =
     case ek
@@ -54,11 +61,20 @@ proc parse_measurement(n: string): float =
     let num_end = n.rfind {'0'..'9'}
     let suffix  = n[(num_end + 1)..^1]
     let num     = parse_float n[0..num_end]
-    case suffix
-    of "mm": num / 1000
-    else:
-        error &"Failed to convert units {suffix} for '{n}'"
-        num
+    num # Might need to parse and track the units if units in the SVG are not consistent
+    # case suffix
+    # of "mm": num
+    # else:
+    #     error &"Failed to convert units {suffix} for '{n}'"
+    #     num
+
+proc upload*(g: ref SvgGroup; cmd_buf: CommandBuffer) =
+    let tforms_sz = g.tforms.len * sizeof g.tforms[0]
+    device.copy_mem g.tbo, g.tforms[0].addr, tforms_sz
+
+    let copy_pass = begin_copy_pass cmd_buf
+    copy_pass.upload g.tbo, g.tform_buf, tforms_sz
+    `end` copy_pass
 
 proc triangulate*(elems: seq[Element]; canvas_w, canvas_h: float32): ref SvgGroup =
     result = new SvgGroup
@@ -72,32 +88,35 @@ proc triangulate*(elems: seq[Element]; canvas_w, canvas_h: float32): ref SvgGrou
     var idxs = new_seq_of_cap[uint32] idx_cnt
 
     for elem in elems:
-        result.tforms.add Mat4Ident
+        var tform = mat4 translation vec3(
+             (elem.pos.x - 0.5*canvas_w)/canvas_w,
+            -(elem.pos.y - 0.5*canvas_h)/canvas_h,
+        )
 
+        let id      = uint16 result.tforms.len
         let fst_idx = vtxs.len
         case elem.kind
         of ekRect:
-            let m = max(elem.w, elem.h)
-            let w = elem.w / m
-            let h = elem.h / m
-            vtxs.add Vertex(pos: vec(0.0, 0.0))
-            vtxs.add Vertex(pos: vec(w  , 0.0))
-            vtxs.add Vertex(pos: vec(w  , h  ))
-            vtxs.add Vertex(pos: vec(0.0, h  ))
+            let x = elem.w / canvas_w / 2
+            let y = elem.h / canvas_h / 2
+
+            vtxs.add Vertex(id: id, pos: vec(-x, -y))
+            vtxs.add Vertex(id: id, pos: vec( x, -y))
+            vtxs.add Vertex(id: id, pos: vec( x,  y))
+            vtxs.add Vertex(id: id, pos: vec(-x,  y))
 
             for i in [0, 1, 2, 0, 2, 3]:
                 idxs.add uint32 (fst_idx + i)
         of ekEllipse:
             # Based on https://www.humus.name/index.php?page=News&ID=228
-            let m = max(elem.w, elem.h)
-            let w = elem.w / m
-            let h = elem.h / m
+            let w = elem.w / canvas_w
+            let h = elem.h / canvas_h
 
             let pt_cnt = 3*2^MaxLod
             var α  = 3*π / 4
             var dα = 2*π / float32 pt_cnt
-            for j in 0..pt_cnt - 1:
-                vtxs.add Vertex(pos: 0.5*vec(w*cos α, h*sin α))
+            for j in 0..(pt_cnt - 1):
+                vtxs.add Vertex(id: id, pos: vec(w*cos α, h*sin α))
                 α -= dα
 
             var v = 1 # Vertex of current triangle 1/2/3
@@ -117,6 +136,8 @@ proc triangulate*(elems: seq[Element]; canvas_w, canvas_h: float32): ref SvgGrou
                 v = 1
                 s = 0
 
+        result.tforms.add tform
+
     assert vtxs.len == vtxs.capacity, &"{vtxs.len} != {vtxs.capacity}"
     assert idxs.len == idxs.capacity, &"{idxs.len} != {idxs.capacity}"
 
@@ -125,18 +146,15 @@ proc triangulate*(elems: seq[Element]; canvas_w, canvas_h: float32): ref SvgGrou
     let tforms_sz = elems.len * sizeof Mat4
     result.idx_cnt   = uint32 idxs.len
     result.tbo       = device.create_transfer_buffer vtxs_sz + idxs_sz + tforms_sz
-    result.vbo       = device.create_buffer(bufUsageVertex         , vtxs_sz  , "VBO")
-    result.ibo       = device.create_buffer(bufUsageIndex          , idxs_sz  , "IBO")
-    result.tform_buf = device.create_buffer(bufUsageGraphicsStorage, tforms_sz, "Transforms")
+    result.vbo       = device.create_buffer(bufUsageVertex         , vtxs_sz  , "SVG VBO")
+    result.ibo       = device.create_buffer(bufUsageIndex          , idxs_sz  , "SVG IBO")
+    result.tform_buf = device.create_buffer(bufUsageGraphicsStorage, tforms_sz, "SVG Transforms")
 
-    var dst = cast[pointer](device.map result.tbo)
-    with dst:
-        copy_mem vtxs[0].addr, vtxs_sz
-        `+=` vtxs_sz
-        copy_mem idxs[0].addr, idxs_sz
-        `+=` idxs_sz
-        copy_mem result.tforms[0].addr, tforms_sz
-    device.unmap result.tbo
+    device.copy_mem result.tbo, [
+        (pointer vtxs[0].addr         , vtxs_sz),
+        (pointer idxs[0].addr         , idxs_sz),
+        (pointer result.tforms[0].addr, tforms_sz),
+    ]
 
     let cmd_buf   = acquire_cmd_buf device
     let copy_pass = begin_copy_pass cmd_buf
@@ -160,6 +178,8 @@ proc parse_element*(node: XmlNode): Element =
                       float32 parse_float node.attr "y"]
         result.w = parse_float node.attr "width"
         result.h = parse_float node.attr "height"
+
+        result.pos += 0.5*vec(result.w, result.h)
     of "circle", "ellipse":
         result = Element(kind: ekEllipse)
         result.pos = [float32 parse_float node.attr "cx",

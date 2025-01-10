@@ -78,12 +78,12 @@ proc create_pipelines() =
 
 proc init*() =
     device = create_device(ShaderFormat, not defined Release)
-    window = create_window(WindowTitle, window_size.x, window_size.y, winNone)
+    window = create_window(WindowTitle, window_size.w, window_size.h, winNone)
     device.claim window
 
     sampler = device.create_sampler()
 
-    depth_tex = device.create_texture(window_size.x, window_size.y, fmt = DepthTextureFormat, usage = texUsageDepthStencilTarget)
+    depth_tex = device.create_texture(window_size.w, window_size.h, fmt = DepthTextureFormat, usage = texUsageDepthStencilTarget)
     device.set_tex_name depth_tex, "Depth Texture"
 
     when not defined Release:
@@ -102,6 +102,7 @@ proc cleanup*(only_pipelns = false) =
     if only_pipelns:
         return
 
+    svgs.set_len 0
     with device:
         destroy depth_tex
         destroy sampler
@@ -159,7 +160,7 @@ proc draw*(cam: Camera3D) =
             clear_stencil   : 0,
         )
 
-    ui.update cmd_buf
+    # ui.update cmd_buf
 
     let ren_pass = begin_render_pass(cmd_buf, [target_info], some depth_info)
     cmd_buf.push_vtx_uniform 0, [cam.proj, cam.view]
