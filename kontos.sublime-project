@@ -1,0 +1,28 @@
+{
+	"folders":
+	[
+		{
+			"path": ".",
+		}
+	],
+	"debugger_configurations":
+	[
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "Launch",
+			"program": "${folder}/main",
+			"pre_debug_task": "build",
+			"args": [],
+			"cwd": "${folder}"
+		},
+	],
+	"debugger_tasks": [
+		{
+			"name": "build",
+			"shell_cmd": "nimble build",
+			"file_regex": "^(.+.nim)\\((\\d+), (\\d+)\\) (.*)",
+			"line_regex": "Error:"
+		}
+	]
+}
