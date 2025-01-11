@@ -1,8 +1,9 @@
 cache/
 tests/res
 
-*.spv
-lib/*.nim
-
 kontos
+main
+
+*.spv
 log.txt
+*.sublime-workspace

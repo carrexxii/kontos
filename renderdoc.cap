@@ -5,7 +5,7 @@
         "commandLine": "",
         "environment": [
         ],
-        "executable": "/home/charles/Projects/kontos/kontos",
+        "executable": "/home/charles/Projects/kontos/main",
         "inject": false,
         "numQueuedFrames": 1,
         "options": {

@@ -20,7 +20,7 @@
 	"debugger_tasks": [
 		{
 			"name": "build",
-			"shell_cmd": "nimble build",
+			"shell_cmd": "nimble build -d:Debug",
 			"file_regex": "^(.+.nim)\\((\\d+), (\\d+)\\) (.*)",
 			"line_regex": "Error:"
 		}
