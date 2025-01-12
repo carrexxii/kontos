@@ -5,6 +5,8 @@ from sdl     import Window
 from sdl/gpu import Device
 export compat, config, with, `/`, `&`
 
+const BuildKind* = if defined Release: "Release" elif defined Debug: "Debug" else: "Testing"
+
 const
     FontDir*   = "res/fonts"
     ShaderDir* = "res/shaders"

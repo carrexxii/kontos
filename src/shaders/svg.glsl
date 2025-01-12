@@ -12,10 +12,15 @@ layout(std140, set = 0, binding = 0) readonly buffer Transforms {
     mat4 tforms[];
 } objs;
 
+layout(set = 1, binding = 0) uniform Camera {
+    mat4 proj;
+    mat4 view;
+} camera;
+
 void main()
 {
     mat4 tform = objs.tforms[in_id];
-    gl_Position = tform * vec4(in_pos, 1, 1);
+    gl_Position = camera.proj * camera.view * tform * vec4(in_pos, 0.5, 1);
 }
 
 #endif

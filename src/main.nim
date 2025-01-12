@@ -1,13 +1,13 @@
 import
     std/options,
     sdl, sdl/gpu, ngm,
-    common, ui, project, resmgr, input, tilemap, renderer
+    common, ui, project, resmgr, input, tilemap, renderer, svg
 import nuklear except Vec2
 
-var camera: Camera3D
+var camera = Camera2D()
 var map: Tilemap
 
-proc shutdown(_: bool) {.noReturn.} =
+proc shutdown*(_: KeyCode; _: bool) {.noReturn.} =
     info "Shutting down..."
     `=destroy` map
     resmgr.cleanup()
@@ -17,52 +17,57 @@ proc shutdown(_: bool) {.noReturn.} =
     info "Shutdown Complete"
     quit 0
 
+proc move_cam(key: KeyCode; was_down: bool) =
+    case key
+    of kcW: camera.dir[1] = if was_down: -1 elif camera.dir.y !=  1: 0 else: camera.dir[1]
+    of kcA: camera.dir[0] = if was_down:  1 elif camera.dir.x != -1: 0 else: camera.dir[0]
+    of kcS: camera.dir[1] = if was_down:  1 elif camera.dir.y != -1: 0 else: camera.dir[1]
+    of kcD: camera.dir[0] = if was_down: -1 elif camera.dir.x !=  1: 0 else: camera.dir[0]
+    else:
+        assert false, $key
+
 proc init*() =
-    info "Starting initialization..."
+    info &"Starting initialization... ({BuildKind} Build)"
     init SdlInitFlags
     renderer.init()
     ui.init()
 
     project.set_path "tests/Test Project.ktsproj"
 
-    camera = Camera3D(proj: perspective_default (window_size.x / window_size.y))
+    camera = create_camera2d(
+        view_w = float32 window_size.w,
+        view_h = float32 window_size.h,
+    )
 
     kcEscape.map shutdown
-    kcQ.map proc(_: bool) = camera.move cdUp
-    kcE.map proc(_: bool) = camera.move cdDown
-    kcW.map proc(_: bool) = camera.move cdForwards
-    kcA.map proc(_: bool) = camera.move cdLeft
-    kcS.map proc(_: bool) = camera.move cdBackwards
-    kcD.map proc(_: bool) = camera.move cdRight
+    kcQ.map proc(_: KeyCode; was_down: bool) = camera.zoom_state = if was_down and camera.zoom_state != zsOut: zsIn  else: zsNone
+    kcE.map proc(_: KeyCode; was_down: bool) = camera.zoom_state = if was_down and camera.zoom_state != zsIn : zsOut else: zsNone
 
-    renderer.add load_model "tests/res/models/fish.nai"
+    move_cam.map [kcW, kcA, kcS, kcD]
 
-    map = tilemap.create(64, 64)
-    set_map map.addr
-
-    kcBackspace.map proc(was_down: bool) =
-        camera.pos = vec3( 1,  1,  0)
-        camera.dir = vec3(-1, -1,  0)
-        camera.up  = vec3( 0,  0, -1)
-    map_motion proc(pos, delta: Vec2) =
-        if modifiers[imRmb]:
-            camera.roll -delta.x*0.005'rad
-            if delta.y > 0:
-                camera.move cdForwards
-            elif delta.y < 0:
-                camera.move cdBackwards
-        else:
-            camera.yaw   -delta.x*0.005'rad
-            camera.pitch -delta.y*0.005'rad
+    let (elems, cw, ch) = svg.load "tests/test.svg"
+    let g = triangulate(elems, cw, ch)
+    renderer.add g
 
     info "Initialization complete"
 
 proc loop*() =
-    info " === Starting Main Loop === "
+    info &" === Starting Main Loop === ({get_ticks()}ns)"
+    var ot, nt, dt, acc: Nanoseconds
+    ot = get_ticks()
     while true:
-        input.update()
-        update camera
-        draw camera.view, camera.proj
+        nt = get_ticks()
+        dt = nt - ot
+        ot = nt
+        acc += dt
+        let dt_s = (float32 dt) / 1000_000_000
+        while acc >= target_dt:
+            acc -= target_dt
+
+            input.update()
+            camera.update dt_s
+
+        renderer.draw camera
 
 init()
 loop()

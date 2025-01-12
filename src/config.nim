@@ -6,4 +6,6 @@ const
 
     WindowTitle* {.strdefine.} = "Kontos"
 
-var window_size* = (w: 1280, h: 800)
+var
+    window_size* = (w: 1280, h: 800)
+    target_dt*   = fps_to_ns 60

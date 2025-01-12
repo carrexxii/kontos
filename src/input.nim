@@ -5,8 +5,8 @@ from ui import context
 const DefaultKeyMaps = 4
 
 type
-    KeyCallback*    = proc(down: bool) {.nimcall.}
-    MouseCallback*  = proc(pos: Vec2; down: bool)
+    KeyCallback*    = proc(key: KeyCode; was_down: bool)
+    MouseCallback*  = proc(btn: MouseButton; was_down: bool; pos: Vec2)
     MotionCallback* = proc(pos, delta: Vec2)
 
     InputModifier* = enum
@@ -23,6 +23,7 @@ type
 var
     modifiers*: array[InputModifier, bool]
 
+    keys     : seq[tuple[code: KeyCode, fn: KeyCallback]]
     key_map  : Table[KeyCode    , seq[KeyCallback]]
     mouse_map: Table[MouseButton, seq[MouseCallback]]
     motion_cbs = new_seq_of_cap[MotionCallback] DefaultKeyMaps
@@ -31,6 +32,10 @@ proc map*(key: KeyCode; cb: KeyCallback) =
     if key notin key_map:
         key_map[key] = new_seq_of_cap[KeyCallback] DefaultKeyMaps
     key_map[key].add cb
+
+proc map*(cb: KeyCallback; keys: openArray[KeyCode]) =
+    for key in keys:
+        key.map cb
 
 proc map*(btn: MouseButton; cb: MouseCallback) =
     if btn notin mouse_map:
@@ -68,9 +73,18 @@ proc update*() =
             else:
                 discard
 
-            if key in key_map:
-                for fn in key_map[key]:
-                    fn was_down
+            if event.kb.repeat or key notin key_map:
+                continue
+            for fn in key_map[key]:
+                if was_down:
+                    keys.add (key, fn)
+                else:
+                    # Might want to improve this, but keys.len will probably always be a single digit
+                    for i in 0..<keys.len:
+                        if keys[i].code == key:
+                            keys.del i
+                            break
+                    fn key, was_down
         of eventMouseButtonDown, eventMouseButtonUp:
             let btn      = event.btn.btn
             let pos      = vec2(event.btn.x, event.btn.y)
@@ -90,7 +104,7 @@ proc update*() =
         
             if btn in mouse_map:
                 for fn in mouse_map[btn]:
-                    fn pos, was_down
+                    fn btn, was_down, pos
         of eventMouseMotion:
             let pos   = vec2(event.motion.x    , event.motion.y)
             let delta = vec2(event.motion.x_rel, event.motion.y_rel)
@@ -103,3 +117,6 @@ proc update*() =
         else:
             discard
     end_input ui.context
+
+    for (code, fn) in keys:
+        fn code, true

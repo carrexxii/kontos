@@ -1,7 +1,7 @@
 import
     std/[xmltree, xmlparser, strutils],
     sdl, sdl/gpu, ngm,
-    common, ptrarith
+    common
 
 const MaxLod = 4
 
@@ -80,7 +80,7 @@ proc triangulate*(elems: seq[Element]; canvas_w, canvas_h: float32): ref SvgGrou
     result = new SvgGroup
     result.tforms = new_seq_of_cap[Mat4] elems.len
 
-    var vtx_cnt, idx_cnt: int
+    var vtx_cnt, idx_cnt: int = 0
     for elem in elems:
         vtx_cnt += elem.kind.vtx_cnt
         idx_cnt += elem.kind.idx_cnt
@@ -169,8 +169,10 @@ proc parse_style*(style: string): Style =
     discard
 
 proc parse_element*(node: XmlNode): Element =
-    result.id    = node.attr "id"
-    result.style = parse_style node.attr "style"
+    result = Element(
+        id   : node.attr "id",
+        style: parse_style node.attr "style",
+    )
     case node.tag
     of "rect":
         result = Element(kind: ekRect)
@@ -202,8 +204,11 @@ proc load*(path: string): tuple[elems: seq[Element]; w, h: float32] =
 
         xml_errs.set_len 0
 
-    result.w = parse_measurement xml.attr "width"
-    result.h = parse_measurement xml.attr "height"
+    result = (
+        elems: @[],
+        w: float32 parse_measurement xml.attr "width",
+        h: float32 parse_measurement xml.attr "height",
+    )
     for node in xml:
         case node.tag
         of "defs":
