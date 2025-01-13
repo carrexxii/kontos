@@ -1,6 +1,5 @@
 import
-    std/options,
-    sdl, sdl/gpu, ngm,
+    sdl, ngm,
     common, ui, project, resmgr, input, tilemap, renderer, svg
 import nuklear except Vec2
 
@@ -26,9 +25,11 @@ proc move_cam(key: KeyCode; was_down: bool) =
     else:
         assert false, $key
 
+var start_time: Nanoseconds
 proc init*() =
     info &"Starting initialization... ({BuildKind} Build)"
     init SdlInitFlags
+    start_time = get_ticks()
     renderer.init()
     ui.init()
 
@@ -51,8 +52,8 @@ proc init*() =
 
     info "Initialization complete"
 
-proc loop*() =
-    info &" === Starting Main Loop === ({get_ticks()}ns)"
+proc loop*() {.raises: [].} =
+    info &" === Starting Main Loop === {ns_to_ms (get_ticks() - start_time)})"
     var ot, nt, dt, acc: Nanoseconds
     ot = get_ticks()
     while true:
@@ -60,6 +61,7 @@ proc loop*() =
         dt = nt - ot
         ot = nt
         acc += dt
+
         let dt_s = (float32 dt) / 1000_000_000
         while acc >= target_dt:
             acc -= target_dt

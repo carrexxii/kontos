@@ -45,7 +45,7 @@ proc map*(btn: MouseButton; cb: MouseCallback) =
 proc map_motion*(cb: MotionCallback) =
     motion_cbs.add cb
 
-proc update*() =
+proc update*() {.raises: [].} =
     begin_input ui.context
     for event in events():
         case event.kind
@@ -75,16 +75,17 @@ proc update*() =
 
             if event.kb.repeat or key notin key_map:
                 continue
-            for fn in key_map[key]:
-                if was_down:
-                    keys.add (key, fn)
-                else:
-                    # Might want to improve this, but keys.len will probably always be a single digit
-                    for i in 0..<keys.len:
-                        if keys[i].code == key:
-                            keys.del i
-                            break
-                    fn key, was_down
+            {.cast(raises: []).}:
+                for fn in key_map[key]:
+                    if was_down:
+                        keys.add (key, fn)
+                    else:
+                        # Might want to improve this, but keys.len will probably always be a single digit
+                        for i in 0..<keys.len:
+                            if keys[i].code == key:
+                                keys.del i
+                                break
+                        fn key, was_down
         of eventMouseButtonDown, eventMouseButtonUp:
             let btn      = event.btn.btn
             let pos      = vec2(event.btn.x, event.btn.y)
@@ -103,14 +104,16 @@ proc update*() =
                 discard
         
             if btn in mouse_map:
-                for fn in mouse_map[btn]:
-                    fn btn, was_down, pos
+                {.cast(raises: []).}:
+                    for fn in mouse_map[btn]:
+                        fn btn, was_down, pos
         of eventMouseMotion:
             let pos   = vec2(event.motion.x    , event.motion.y)
             let delta = vec2(event.motion.x_rel, event.motion.y_rel)
             ui.context.input_motion pos.x, pos.y
             for fn in motion_cbs:
-                fn pos, delta
+                {.cast(raises: []).}:
+                    fn pos, delta
         of eventTextInput:
             for c in event.text.text:
                 ui.context.input_char c
@@ -119,4 +122,5 @@ proc update*() =
     end_input ui.context
 
     for (code, fn) in keys:
-        fn code, true
+        {.cast(raises: []).}:
+            fn code, true

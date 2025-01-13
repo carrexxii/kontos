@@ -115,7 +115,7 @@ proc init*() =
         ttf_sz       = uint font_file.len
         oversample_h = 1
         oversample_v = 1
-        range        = char_ranges[0].addr
+        # range        = char_ranges[0].addr
 
     init atlas
     begin atlas
@@ -129,7 +129,7 @@ proc init*() =
     info "Initialized UI"
 
 proc cleanup*() =
-    debug "Cleaning up UI..."
+    info "Cleaning up UI..."
     with device:
         destroy sdl_trans
         destroy sdl_vtxs
@@ -156,8 +156,8 @@ proc add_objects(paths: seq[string]) =
                 save_file_dialog (proc(dst: string) = convert dst, src), default_loc = ppath
 
 proc update*(cmd_buf: gpu.CommandBuffer) =
-    let w = window_size.x
-    let h = window_size.y
+    let w = window_size.w
+    let h = window_size.h
     let sb_w = 0.3 * cfloat w
     context.begin nk.Rect(x: (cfloat w) - sb_w, y: 0, w: sb_w, h: cfloat h), winBorder
     context.min_row_height = 100

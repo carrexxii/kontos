@@ -1,9 +1,10 @@
-version     = "0.0.1"
-author      = "carrexxii"
-description = ""
-license     = ""
-src_dir     = "src"
-bin         = @["main"]
+version      = "0.0.1"
+author       = "carrexxii"
+description  = ""
+license      = ""
+src_dir      = "src"
+bin          = @["main"]
+entry_points = @["src/main.nim"]
 
 requires "nim >= 2.0.0"
 

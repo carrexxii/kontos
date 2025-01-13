@@ -15,8 +15,9 @@ type
         tform_buf*: Buffer
 
     Vertex* = object
-        id* : uint32
-        pos*: Vec2
+        id*    : uint32
+        pos*   : Vec2
+        colour*: Colour
 
     ElementKind = enum
         ekRect
@@ -32,7 +33,7 @@ type
             w*, h*: float32
 
     Style = object
-        colour: uint32
+        fill: Colour
 
 var xml_errs: seq[string]
 
@@ -58,15 +59,30 @@ func idx_cnt*(ek: ElementKind): int =
         3*cnt
 
 proc parse_measurement(n: string): float =
-    let num_end = n.rfind {'0'..'9'}
-    let suffix  = n[(num_end + 1)..^1]
-    let num     = parse_float n[0..num_end]
-    num # Might need to parse and track the units if units in the SVG are not consistent
-    # case suffix
-    # of "mm": num
-    # else:
-    #     error &"Failed to convert units {suffix} for '{n}'"
-    #     num
+    try:
+        let num_end = n.rfind {'0'..'9'}
+        let suffix  = n[(num_end + 1)..^1]
+        let num     = parse_float n[0..num_end]
+        num # Might need to parse and track the units if units in the SVG are not consistent
+        # case suffix
+        # of "mm": num
+        # else:
+        #     error &"Failed to convert units {suffix} for '{n}'"
+        #     num
+    except ValueError:
+        error &"Failed to parse measurement '{n}'"
+        0
+
+proc parse_colour(c: string): Colour =
+    try:
+        if c.starts_with "#":
+            colour parse_hex_int c
+        else:
+            error &"Failed to parse colour '{c}'"
+            colour 0, 0, 0
+    except ValueError:
+        error &"Failed to parse colour '{c}'"
+        colour 0, 0, 0
 
 proc upload*(g: ref SvgGroup; cmd_buf: CommandBuffer) =
     let tforms_sz = g.tforms.len * sizeof g.tforms[0]
@@ -87,36 +103,39 @@ proc triangulate*(elems: seq[Element]; canvas_w, canvas_h: float32): ref SvgGrou
     var vtxs = new_seq_of_cap[Vertex] vtx_cnt
     var idxs = new_seq_of_cap[uint32] idx_cnt
 
+    let ar = canvas_w / canvas_h
+    let sz = max(canvas_w, canvas_h)
     for elem in elems:
-        var tform = mat4 translation vec3(
-             (elem.pos.x - 0.5*canvas_w)/canvas_w,
-            -(elem.pos.y - 0.5*canvas_h)/canvas_h,
-        )
+        var tform = Mat4Ident
 
         let id      = uint16 result.tforms.len
+        let colour  = elem.style.fill
         let fst_idx = vtxs.len
         case elem.kind
         of ekRect:
-            let x = elem.w / canvas_w / 2
-            let y = elem.h / canvas_h / 2
+            let pos = vec(elem.pos.x - canvas_w/2, -(elem.pos.y - canvas_h/2)) / sz
+            let w = elem.w / sz / 2
+            let h = elem.h / sz / 2
 
-            vtxs.add Vertex(id: id, pos: vec(-x, -y))
-            vtxs.add Vertex(id: id, pos: vec( x, -y))
-            vtxs.add Vertex(id: id, pos: vec( x,  y))
-            vtxs.add Vertex(id: id, pos: vec(-x,  y))
+            vtxs.add Vertex(id: id, pos: pos + vec(-w, -h), colour: colour)
+            vtxs.add Vertex(id: id, pos: pos + vec( w, -h), colour: colour)
+            vtxs.add Vertex(id: id, pos: pos + vec( w,  h), colour: colour)
+            vtxs.add Vertex(id: id, pos: pos + vec(-w,  h), colour: colour)
 
             for i in [0, 1, 2, 0, 2, 3]:
                 idxs.add uint32 (fst_idx + i)
         of ekEllipse:
             # Based on https://www.humus.name/index.php?page=News&ID=228
-            let w = elem.w / canvas_w
-            let h = elem.h / canvas_h
+            let pos = vec(elem.pos.x - (elem.w + canvas_w)/2,
+                        -(elem.pos.y - (elem.h + canvas_h)/2)) / sz
+            let w = elem.w / sz
+            let h = elem.h / sz
 
             let pt_cnt = 3*2^MaxLod
             var α  = 3*π / 4
             var dα = 2*π / float32 pt_cnt
             for j in 0..(pt_cnt - 1):
-                vtxs.add Vertex(id: id, pos: vec(w*cos α, h*sin α))
+                vtxs.add Vertex(id: id, pos: pos + vec(w*cos α, h*sin α), colour: colour)
                 α -= dα
 
             var v = 1 # Vertex of current triangle 1/2/3
@@ -166,37 +185,58 @@ proc triangulate*(elems: seq[Element]; canvas_w, canvas_h: float32): ref SvgGrou
     submit cmd_buf
 
 proc parse_style*(style: string): Style =
-    discard
+    result = Style()
+    var fill_opacity = 1.0'f32
+    let attrs = style.split ";"
+    for attr in attrs:
+        let c = attr.rfind ':'
+        let name = attr[0..(c - 1)]
+        let val  = attr[(c + 1)..^1]
+        case name
+        of "fill": result.fill = parse_colour val
+        of "fill-opacity": fill_opacity = parse_float val
+        else:
+            warn &"Ignoring SVG style of '{name}'"
+
+    result.fill.a = uint8 255*fill_opacity
 
 proc parse_element*(node: XmlNode): Element =
-    result = Element(
-        id   : node.attr "id",
-        style: parse_style node.attr "style",
-    )
-    case node.tag
-    of "rect":
-        result = Element(kind: ekRect)
-        result.pos = [float32 parse_float node.attr "x",
-                      float32 parse_float node.attr "y"]
-        result.w = parse_float node.attr "width"
-        result.h = parse_float node.attr "height"
+    try:
+        let id    = node.attr "id"
+        let style = parse_style node.attr "style"
+        case node.tag
+        of "rect":
+            result = Element(kind: ekRect, id: id, style: style)
+            result.pos = [float32 parse_float node.attr "x",
+                          float32 parse_float node.attr "y"]
+            result.w = parse_float node.attr "width"
+            result.h = parse_float node.attr "height"
+        of "circle", "ellipse":
+            result = Element(kind: ekEllipse, id: id, style: style)
+            result.pos = [float32 parse_float node.attr "cx",
+                          float32 parse_float node.attr "cy"]
+            if node.tag == "circle":
+                result.w = parse_float node.attr "r"
+                result.h = result.w
+            else:
+                result.w = parse_float node.attr "rx"
+                result.h = parse_float node.attr "ry"
+        else:
+            error "Failed to parse element: " & node.tag
+            result = Element(id: id, style: style)
 
         result.pos += 0.5*vec(result.w, result.h)
-    of "circle", "ellipse":
-        result = Element(kind: ekEllipse)
-        result.pos = [float32 parse_float node.attr "cx",
-                      float32 parse_float node.attr "cy"]
-        if node.tag == "circle":
-            result.w = parse_float node.attr "r"
-            result.h = result.w
-        else:
-            result.w = parse_float node.attr "rx"
-            result.h = parse_float node.attr "ry"
-    else:
-        error "Failed to parse element: " & node.tag
+    except ValueError:
+        error &"Failed to parse element '{node}'"
+        result = Element()
 
-proc load*(path: string): tuple[elems: seq[Element]; w, h: float32] =
-    let xml = load_xml(path, xml_errs, options = {})
+proc load*(path: string): tuple[elems: seq[Element]; w, h: float32] {.raises: [].} =
+    result = (elems: @[], w: 0, h: 0)
+    let xml = try: load_xml(path, xml_errs, options = {})
+    except:
+        error "Failed to load SVG file: " & path
+        return
+
     if xml_errs.len > 0:
         error &"XML parsing error in svg file '{path}'"
         for err in xml_errs:
@@ -204,11 +244,8 @@ proc load*(path: string): tuple[elems: seq[Element]; w, h: float32] =
 
         xml_errs.set_len 0
 
-    result = (
-        elems: @[],
-        w: float32 parse_measurement xml.attr "width",
-        h: float32 parse_measurement xml.attr "height",
-    )
+    result.w = float32 parse_measurement xml.attr "width"
+    result.h = float32 parse_measurement xml.attr "height"
     for node in xml:
         case node.tag
         of "defs":

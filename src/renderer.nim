@@ -16,7 +16,7 @@ var
 
     fill_mode = fmFill
 
-proc toggle_fill*(was_down: bool)
+proc toggle_fill*(_: KeyCode; was_down: bool)
 
 proc create_pipelines() =
     var ct_descr = ColourTargetDescription(
@@ -34,14 +34,15 @@ proc create_pipelines() =
         ),
     )
 
-    block: # VectorModel Pipeline
-        let vtx_shader  = load_shader("svg.vert", sbo_cnt = 1)
+    block: # SVG Pipeline
+        let vtx_shader  = load_shader("svg.vert", ubo_cnt = 1, sbo_cnt = 1)
         let frag_shader = load_shader("svg.frag")
         model_pipeln = device.create_graphics_pipeline(vtx_shader, frag_shader,
             vertex_input_state(
                 [vtx_descr(0, sizeof svg.Vertex, inputVertex)],
                 [vtx_attr(0, 0, vtxElemUInt  , svg.Vertex.offsetof id),
-                 vtx_attr(1, 0, vtxElemFloat2, svg.Vertex.offsetof pos)],
+                 vtx_attr(1, 0, vtxElemFloat2, svg.Vertex.offsetof pos),
+                 vtx_attr(2, 0, vtxElemUByte4, svg.Vertex.offsetof colour)],
             ),
             target_info = GraphicsPipelineTargetInfo(
                 colour_target_descrs    : ct_descr.addr,
@@ -108,8 +109,8 @@ proc cleanup*(only_pipelns = false) =
         destroy sampler
         destroy
 
-proc toggle_fill*(was_down: bool) =
-    if was_down:
+proc toggle_fill*(_: KeyCode; was_down: bool) =
+    if not was_down:
         fill_mode = (if fill_mode == fmFill: fmLine else: fmFill)
         cleanup only_pipelns = true
         create_pipelines()
@@ -139,13 +140,13 @@ proc draw_tilemap(ren_pass: RenderPass; cmd_buf: CommandBuffer) =
         `bind` tilemap_pipeln
         draw vtx_cnt
 
-proc draw*(cam: Camera3D) =
+proc draw*(cam: Camera2D) =
     let
         cmd_buf = acquire_cmd_buf device
         screen  = cmd_buf.swapchain_tex window
         target_info = ColourTargetInfo(
             tex         : screen.tex,
-            clear_colour: fcolour(0.12, 0.28, 0.36),
+            clear_colour: colour(0.36, 0.28, 0.12),
             load_op     : loadClear,
             store_op    : storeStore,
         )

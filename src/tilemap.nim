@@ -1,4 +1,4 @@
-import common, sdl/gpu
+import common, sdl/gpu, ptrarith
 from std/sequtils import new_seq_with
 
 type
@@ -17,10 +17,6 @@ proc `=destroy`*(map: Tilemap) =
 func buf_sz*(map: Tilemap): int =
     8 + (int map.w)*(int map.h)*sizeof Tile
 
-func `+`(p: pointer; bytes: int): pointer {.inline.} =
-    cast[pointer](cast[int](p) + bytes)
-func `+=`(p: var pointer; bytes: int) {.inline.} =
-    p = p + bytes
 proc upload*(map: Tilemap) =
     var dst = cast[pointer](device.map map.trans_buf)
     copy_mem dst, map.addr, 8
