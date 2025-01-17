@@ -53,8 +53,8 @@ proc init*() =
     info "Initialization complete"
 
 proc loop*() {.raises: [].} =
-    info &" === Starting Main Loop === {ns_to_ms (get_ticks() - start_time)})"
-    var ot, nt, dt, acc: Nanoseconds
+    info &" === Starting Main Loop === ({ns_to_ms (get_ticks() - start_time)})"
+    var ot, nt, dt, acc = Nanoseconds 0
     ot = get_ticks()
     while true:
         nt = get_ticks()

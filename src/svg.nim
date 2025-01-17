@@ -1,7 +1,8 @@
 import
-    std/[xmltree, xmlparser, strutils],
+    std/[enumerate, xmltree, xmlparser, strutils],
     sdl, sdl/gpu, ngm,
     common
+from std/strscans import scanf
 
 const MaxLod = 4
 
@@ -22,6 +23,7 @@ type
     ElementKind = enum
         ekRect
         ekEllipse
+        ekPath
     Element = object
         id*   : string
         style*: Style
@@ -31,9 +33,23 @@ type
         case kind*: ElementKind
         of ekRect, ekEllipse:
             w*, h*: float32
+        of ekPath:
+            instrs*: seq[Instruction]
+
+    InstructionKind = enum
+        ikMove
+        ikPath
+        ikClose
+    Instruction = object
+        case kind: InstructionKind
+        of ikMove: pos : Vec2
+        of ikPath: path: seq[Vec2]
+        of ikClose:
+            discard
 
     Style = object
-        fill: Colour
+        fill    : Colour
+        stroke_w: float32
 
 var xml_errs: seq[string]
 
@@ -43,20 +59,6 @@ proc `=destroy`*(g: SvgGroup) =
         destroy g.ibo
         destroy g.tbo
         destroy g.tform_buf
-
-func vtx_cnt*(ek: ElementKind): int =
-    case ek
-    of ekRect   : 4
-    of ekEllipse: 3*2^MaxLod
-
-func idx_cnt*(ek: ElementKind): int =
-    case ek
-    of ekRect: 6
-    of ekEllipse:
-        var cnt = 1
-        for i in 1..MaxLod:
-            cnt += 3*2^(i - 1)
-        3*cnt
 
 proc parse_measurement(n: string): float =
     try:
@@ -96,12 +98,8 @@ proc triangulate*(elems: seq[Element]; canvas_w, canvas_h: float32): ref SvgGrou
     result = new SvgGroup
     result.tforms = new_seq_of_cap[Mat4] elems.len
 
-    var vtx_cnt, idx_cnt: int = 0
-    for elem in elems:
-        vtx_cnt += elem.kind.vtx_cnt
-        idx_cnt += elem.kind.idx_cnt
-    var vtxs = new_seq_of_cap[Vertex] vtx_cnt
-    var idxs = new_seq_of_cap[uint32] idx_cnt
+    var vtxs: seq[Vertex] = @[]
+    var idxs: seq[uint32] = @[]
 
     let ar = canvas_w / canvas_h
     let sz = max(canvas_w, canvas_h)
@@ -154,11 +152,31 @@ proc triangulate*(elems: seq[Element]; canvas_w, canvas_h: float32): ref SvgGrou
                     inc v
                 v = 1
                 s = 0
+        of ekPath:
+            for (i, instr) in enumerate elem.instrs:
+                case instr.kind
+                of ikMove:
+                    discard
+                of ikPath:
+                    discard
+                of ikClose:
+                    # This is assuming instrs[i - 2] is an ikMove
+                    #              and instrs[i - 1] is an ikPath
+                    var pts = new_seq_of_cap[Vec2](elem.instrs[i - 1].path.len + 1)
+                    var pos = elem.instrs[i - 2].pos
+                    pts.add pos
+                    for pt in elem.instrs[i - 1].path:
+                        pos += pt
+                        let pt = pos
+                        pts.add pt
+
+                    let path = delaunay pts
+                    for (i, pt) in enumerate path:
+                        let pos = vec((pt.x - canvas_w/2), -(pt.y - canvas_h/2))
+                        vtxs.add Vertex(id: id, pos: (elem.pos + pos)/sz, colour: colour)
+                        idxs.add uint32 fst_idx + i
 
         result.tforms.add tform
-
-    assert vtxs.len == vtxs.capacity, &"{vtxs.len} != {vtxs.capacity}"
-    assert idxs.len == idxs.capacity, &"{idxs.len} != {idxs.capacity}"
 
     let vtxs_sz   = vtxs.len * sizeof vtxs[0]
     let idxs_sz   = idxs.len * sizeof idxs[0]
@@ -184,7 +202,7 @@ proc triangulate*(elems: seq[Element]; canvas_w, canvas_h: float32): ref SvgGrou
         `end`
     submit cmd_buf
 
-proc parse_style*(style: string): Style =
+proc parse_style(style: string): Style =
     result = Style()
     var fill_opacity = 1.0'f32
     let attrs = style.split ";"
@@ -193,26 +211,38 @@ proc parse_style*(style: string): Style =
         let name = attr[0..(c - 1)]
         let val  = attr[(c + 1)..^1]
         case name
-        of "fill": result.fill = parse_colour val
+        of "fill"        : result.fill     = parse_colour val
+        of "stroke-width": result.stroke_w = parse_float val
         of "fill-opacity": fill_opacity = parse_float val
         else:
             warn &"Ignoring SVG style of '{name}'"
 
     result.fill.a = uint8 255*fill_opacity
 
-proc parse_element*(node: XmlNode): Element =
+proc parse_transform(tform: string): tuple[pos: Vec2] =
+    if tform == "":
+        return
+
+    var a, b: float
+    for attr in tform.split ';':
+        if attr.scanf("translate($f,$f)", a, b):
+            result.pos = vec(a, -b)
+        else:
+            assert false, &"Failed to parse transform attribute '{attr}' in '{tform}'"
+
+proc parse_element(node: XmlNode): Element =
     try:
-        let id    = node.attr "id"
-        let style = parse_style node.attr "style"
         case node.tag
         of "rect":
-            result = Element(kind: ekRect, id: id, style: style)
+            result = Element(kind: ekRect)
             result.pos = [float32 parse_float node.attr "x",
                           float32 parse_float node.attr "y"]
             result.w = parse_float node.attr "width"
             result.h = parse_float node.attr "height"
+
+            result.pos += 0.5*vec(result.w, result.h)
         of "circle", "ellipse":
-            result = Element(kind: ekEllipse, id: id, style: style)
+            result = Element(kind: ekEllipse)
             result.pos = [float32 parse_float node.attr "cx",
                           float32 parse_float node.attr "cy"]
             if node.tag == "circle":
@@ -221,13 +251,44 @@ proc parse_element*(node: XmlNode): Element =
             else:
                 result.w = parse_float node.attr "rx"
                 result.h = parse_float node.attr "ry"
+
+            result.pos += 0.5*vec(result.w, result.h)
+        of "path":
+            proc parse_pos(x: string): Vec2 =
+                let x = x.split ','
+                [float32 parse_float x[0],
+                 float32 parse_float x[1]]
+
+            result = Element(kind: ekPath)
+            let instrs = split node.attr "d"
+            var instr: Instruction
+            var i = 0
+            while i < instrs.len:
+                case instrs[i]
+                of "m":
+                    inc i
+                    instr = Instruction(kind: ikMove, pos: parse_pos instrs[i])
+                    inc i
+                of "z":
+                    inc i
+                    instr = Instruction(kind: ikClose)
+                else:
+                    instr = Instruction(kind: ikPath, path: @[])
+                    while instrs[i][0].is_digit or instrs[i][0] == '-':
+                        instr.path.add parse_pos instrs[i]
+                        inc i
+
+                result.instrs.add instr
         else:
             error "Failed to parse element: " & node.tag
-            result = Element(id: id, style: style)
+            result = Element()
 
-        result.pos += 0.5*vec(result.w, result.h)
-    except ValueError:
-        error &"Failed to parse element '{node}'"
+        let tform = parse_transform node.attr "transform"
+        result.id    = node.attr "id"
+        result.style = parse_style node.attr "style"
+        result.pos += tform.pos
+    except ValueError as exn:
+        error &"Failed to parse element '{node}' ({exn.msg})"
         result = Element()
 
 proc load*(path: string): tuple[elems: seq[Element]; w, h: float32] {.raises: [].} =
@@ -250,7 +311,7 @@ proc load*(path: string): tuple[elems: seq[Element]; w, h: float32] {.raises: []
         case node.tag
         of "defs":
             if node.len > 0:
-                assert false
+                warn &"Skipping SVG node '{node.tag}' ({node.len} children)"
         of "g":
             for child in node:
                 result.elems.add parse_element child
